@@ -1,6 +1,6 @@
 ---
 name: astro-companion
-description: "Millionaires study markets, billionaires study the stars" - AI astrology companion with timing guidance, natal analysis, and cosmic calendar integration.
+description: "Millionaires study markets, billionaires study stars" - AI astrology companion with timing guidance, natal analysis, and cosmic calendar integration.
 aliases:
   - oracle
 triggers: "oracle, astrology, horoscope, birth chart, moon phase, mercury retrograde, transits, timing, cosmic, planetary, sign, rising, synastry, solar return, zodiac, natal, celestial, vibe, alignment, conjunction, retrograde, when should I, best day, best time, schedule around, tarot, numerology, chakra, harmonic"

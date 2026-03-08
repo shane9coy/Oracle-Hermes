@@ -13,7 +13,7 @@
 
 set -e
 
-echo "✨ Installing Oracle - Millionaires study markets, billionaires study the stars..."
+echo "✨ Installing Oracle - Millionaires study markets, billionaires study stars..."
 
 # Colors
 GREEN='\033[0;32m'
@@ -167,4 +167,4 @@ echo ""
 echo -e "${YELLOW}Want to start the browser star map?${NC}"
 echo "  cd ~/.hermes/skills/oracle/astro-companion/ui && python server.py"
 echo ""
-echo "✧ Millionaires study markets, billionaires study the stars ✧"
+echo "✧ Millionaires study markets, billionaires study stars ✧"

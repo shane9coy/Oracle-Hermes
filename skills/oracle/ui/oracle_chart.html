@@ -67,7 +67,8 @@
       z-index: 100;
     }
 
-    .title { margin: 0 0 4px; font-size: 2rem; }
+    .title { margin: 0 0 4px; font-size: 1.1rem; }
+    .section-label { margin: 0 0 2px; font-size: 0.75rem; color: var(--gold); text-transform: uppercase; letter-spacing: 0.1em; }
     .subtitle { color: var(--muted); margin: 0 0 16px; font-size: 0.92rem; line-height: 1.45; }
     .section { margin: 18px 0 0; }
     .section h3 { margin: 0 0 10px; font-size: 1.25rem; color: var(--gold); }
@@ -117,6 +118,9 @@
       position: relative;
       cursor: help;
       transition: all 0.2s ease;
+      overflow: visible;
+      width: 100%;
+      box-sizing: border-box;
     }
     .element-pill:hover {
       background: rgba(255,255,255,0.1);
@@ -124,28 +128,42 @@
     }
     .element-pill .count {
       font-weight: bold;
-      margin-left: 6px;
+      margin-left: auto;
+      padding-left: 8px;
       font-size: 0.9em;
     }
+    .element-pill .color-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-left: 8px;
+      flex-shrink: 0;
+    }
+    .element-pill .fire .color-dot { background: var(--fire); }
+    .element-pill .earth .color-dot { background: var(--earth); }
+    .element-pill .air .color-dot { background: var(--air); }
+    .element-pill .water .color-dot { background: var(--water); }
     .element-tooltip {
       visibility: hidden;
       position: absolute;
       bottom: 100%;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(20, 20, 25, 0.95);
-      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(20, 20, 25, 0.98);
+      border: 1px solid rgba(255,255,255,0.2);
       border-radius: 10px;
       padding: 12px 14px;
       width: 220px;
       font-size: 0.8rem;
       line-height: 1.5;
       color: var(--bone);
-      z-index: 100;
-      box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+      z-index: 9999;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.5);
       margin-bottom: 10px;
       opacity: 0;
       transition: opacity 0.2s ease;
+      pointer-events: none;
+      overflow: visible;
     }
     .element-pill:hover .element-tooltip {
       visibility: visible;
@@ -158,7 +176,7 @@
       left: 50%;
       transform: translateX(-50%);
       border: 8px solid transparent;
-      border-top-color: rgba(20, 20, 25, 0.95);
+      border-top-color: rgba(20, 20, 25, 0.98);
     }
     .element-tooltip strong {
       display: block;
@@ -280,20 +298,17 @@
     <div id="scene"></div>
 
     <div id="leftPanel" class="panel">
-      <h1 class="title">✧ Oracle ✧</h1>
-      <p class="subtitle">"Millionaires study markets, billionaires study the stars"</p>
+      <p class="section-label" id="userLabel">User's Chart</p>
+      <h1 class="title" id="chartTitle">✧ Oracle ✧</h1>
+
 
       <div class="stack">
         <label for="datetimeInput">Date & time</label>
         <input id="datetimeInput" type="datetime-local" />
-        <div class="row">
-          <button id="nowButton" class="action">Now</button>
-          <button id="animateButton" class="action">Animate Day</button>
-          <button id="shareButton" class="action">Copy Link</button>
-        </div>
-        <div class="row" style="margin-top: 8px;">
+        <div class="row" style="gap: 6px; flex-wrap: wrap;">
           <button id="natalButton" class="action active">Natal</button>
-          <button id="transitButton" class="action">Transits</button>
+          <button id="nowButton" class="action">Now</button>
+          <button id="transitButton" class="action">Transit</button>
         </div>
         <div class="row" style="margin-top: 8px;">
           <button id="anglesButton" class="action">Show Natal Angles</button>
@@ -357,19 +372,13 @@
         <div id="minorAspects" class="collapsible-content list"></div>
       </div>
 
-      <!-- Chakra (collapsible) -->
-      <div class="section">
-        <h3 class="collapsible-toggle" data-section="chakra" style="cursor:pointer;display:flex;align-items:center;gap:6px;">
-          🌀 Chakra <span class="collapsible-arrow" data-section="chakra">▾</span>
-        </h3>
-        <div id="chakra" class="collapsible-content list"></div>
-      </div>
+
     </div>
 
     <div id="rightPanel" class="panel open">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <h2 class="title">Reading</h2>
-        <button id="addToCalendar" class="action" style="padding: 6px 12px;font-size:1.2rem;" title="Add to Google Calendar">+</button>
+
       </div>
       <div class="reading-body" id="readingBody"></div>
       <div class="section">
@@ -409,9 +418,8 @@
     </div>
 
     <div id="bottomBar">
-      <button id="calendarToggle" class="action" style="font-size: 1.1rem;">📅</button>
       <div id="statusLeft">Moon phase pending...</div>
-      <div id="statusCenter" class="muted">Click an event to snap the chart to that moment</div>
+      <div id="statusCenter" class="muted"></div>
       <div id="statusRight">Mercury status pending...</div>
     </div>
 
@@ -448,9 +456,13 @@
           console.log('Loaded cached natal data:', Object.keys(cachedData));
           window.cachedNatalData = cachedData;
           
-          // Update document title with user name
+          // Update document title and header with user name
           if (cachedData._profile && cachedData._profile.preferred_name) {
             document.title = `Oracle Star Map — ${cachedData._profile.preferred_name}`;
+            const titleEl = document.getElementById('chartTitle');
+            const labelEl = document.getElementById('userLabel');
+            if (titleEl) titleEl.textContent = `✧ ${cachedData._profile.preferred_name}'s Chart ✧`;
+            if (labelEl) labelEl.textContent = `${cachedData._profile.preferred_name}'s Chart`;
           }
           
           // Populate right panel with real natal data
@@ -494,7 +506,8 @@
                   </div>`;
                 }
               }
-              // Add houses
+              // Houses section removed - add back if needed
+              /*
               html += '<div style="margin: 8px 0; opacity: 0.5; text-align: center;">— Houses —</div>';
               for (let i = 1; i <= 12; i++) {
                 const hkey = 'house_' + i;
@@ -504,6 +517,7 @@
                   </div>`;
                 }
               }
+              */
               anglesEl.innerHTML = html;
             }
           }
@@ -1064,6 +1078,7 @@
     const readingBody = document.getElementById('readingBody');
     const statusLeft = document.getElementById('statusLeft');
     const statusRight = document.getElementById('statusRight');
+    const leftPanel = document.getElementById('leftPanel');
     const rightPanel = document.getElementById('rightPanel');
     const drawerToggle = document.getElementById('drawerToggle');
 
@@ -1558,7 +1573,7 @@
             const meaning = elementMeanings[el];
             return `
               <span class="element-pill ${el}">
-                ${elementLabels[el]}<span class="count">${count}</span>
+                ${elementLabels[el]}<span class="count">${count}</span><span class="color-dot"></span>
                 <div class="element-tooltip">
                   <strong>${elementLabels[el]} — ${count} planet${count !== 1 ? 's' : ''}</strong>
                   ${meaning.meaning}
@@ -1589,7 +1604,7 @@
           <small>${house.sign}</small>
         </div>
       `).join('');
-      anglesEl.innerHTML = angleCards + '<div style="margin: 12px 0; opacity: 0.5; text-align: center;">— Houses —</div>' + houseCards;
+      anglesEl.innerHTML = angleCards;
 
       // Display Minor Aspects (from cache)
       const minorAspectsEl = document.getElementById('minorAspects');
@@ -1641,7 +1656,7 @@
       statusRight.textContent = retrogrades.length > 0 
         ? `🔄 ${retrogrades.join(', ')} Retrograde` 
         : 'All Planets Direct';
-      statusCenter.textContent = `${planetPositions[1].sign} Moon · click an event to pivot the wheel`;
+      statusCenter.textContent = '';
 
       const url = new URL(window.location.href);
       url.searchParams.set('dt', dateObj.toISOString());
@@ -1661,41 +1676,6 @@
       const now = new Date();
       datetimeInput.value = toInputValue(now);
       updateFromDate(now);
-    });
-
-    document.getElementById('animateButton').addEventListener('click', () => {
-      if (animationHandle) {
-        clearInterval(animationHandle);
-        animationHandle = null;
-        document.getElementById('animateButton').textContent = 'Animate Day';
-        return;
-      }
-      let dt = fromInputValue(datetimeInput.value);
-      const start = new Date(dt);
-      start.setHours(0, 0, 0, 0);
-      dt = start;
-      let steps = 0;
-      document.getElementById('animateButton').textContent = 'Stop';
-      animationHandle = setInterval(() => {
-        const next = new Date(start.getTime() + steps * 15 * 60000);
-        datetimeInput.value = toInputValue(next);
-        updateFromDate(next);
-        steps += 1;
-        if (steps > 96) {
-          clearInterval(animationHandle);
-          animationHandle = null;
-          document.getElementById('animateButton').textContent = 'Animate Day';
-        }
-      }, 120);
-    });
-
-    document.getElementById('shareButton').addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(window.location.href);
-        statusCenter.textContent = 'Share link copied. You can bookmark or serve this file locally.';
-      } catch (error) {
-        statusCenter.textContent = 'Unable to copy automatically. Use the current file URL in your browser.';
-      }
     });
 
     // Mode state
@@ -1775,7 +1755,7 @@
         const end = new Date();
         end.setDate(end.getDate() + 14);
         
-        const response = await fetch(`http://127.0.0.1:8081/calendar?start=${start.toISOString()}&end=${end.toISOString()}`);
+        const response = await fetch(`/calendar-events?start=${start.toISOString()}&end=${end.toISOString()}`);
         let events = [];
         
         if (response.ok) {
@@ -1902,18 +1882,6 @@
     // Note: Calendar is loaded in left panel via loadCalendarIntoPanel()
     // The bottom calendar panel functionality continues below...
 
-    // Calendar Panel Toggle
-    let calendarPanelOpen = false;
-    document.getElementById('calendarToggle').addEventListener('click', () => {
-      calendarPanelOpen = !calendarPanelOpen;
-      const panel = document.getElementById('calendarPanel');
-      panel.style.display = calendarPanelOpen ? 'block' : 'none';
-      
-      if (calendarPanelOpen) {
-        loadCalendarPanel();
-      }
-    });
-
     document.getElementById('minimizeCalendar').addEventListener('click', () => {
       calendarPanelOpen = false;
       document.getElementById('calendarPanel').style.display = 'none';
@@ -1930,7 +1898,7 @@
         const end = new Date();
         end.setDate(end.getDate() + 14);
         
-        const response = await fetch(`http://127.0.0.1:8081/calendar?start=${start.toISOString()}&end=${end.toISOString()}`);
+        const response = await fetch(`/calendar-events?start=${start.toISOString()}&end=${end.toISOString()}`);
         let events = [];
         
         if (response.ok) {
@@ -2053,17 +2021,6 @@ Please analyze the astrological timing, suggest the best way to navigate this ev
       }
     });
 
-    // Calendar Panel Toggle
-    calendarPanelOpen = false;
-    document.getElementById('calendarToggle').addEventListener('click', () => {
-      calendarPanelOpen = !calendarPanelOpen;
-      const panel = document.getElementById('calendarPanel');
-      panel.style.display = calendarPanelOpen ? 'block' : 'none';
-      
-      if (calendarPanelOpen) {
-        loadCalendarPanel();
-      }
-    });
 
     document.getElementById('minimizeCalendar').addEventListener('click', () => {
       calendarPanelOpen = false;
@@ -2081,7 +2038,7 @@ Please analyze the astrological timing, suggest the best way to navigate this ev
         const end = new Date();
         end.setDate(end.getDate() + 14);
         
-        const response = await fetch(`http://127.0.0.1:8081/calendar?start=${start.toISOString()}&end=${end.toISOString()}`);
+        const response = await fetch(`/calendar-events?start=${start.toISOString()}&end=${end.toISOString()}`);
         let events = [];
         
         if (response.ok) {
@@ -2147,42 +2104,6 @@ Please analyze the astrological timing, suggest the best way to navigate this ev
     const modalDateTime = document.getElementById('eventDateTime');
     const modalDescription = document.getElementById('eventDescription');
     
-    // Open modal and populate with reading data
-    document.getElementById('addToCalendar').addEventListener('click', () => {
-      const reading = readingForMoment(currentDate, 
-        planets.map(p => ({
-          name: p.name,
-          longitude: approximateLongitude(p, currentDate),
-          sign: p.sign,
-          degree: p.degree,
-          retrograde: p.retrograde
-        }))
-      );
-      
-      // Create event data
-      const dateStr = currentDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-      const title = `🌟 Astrology: ${dateStr} - ${reading.headline}`;
-      
-      // Build description
-      const description = `${reading.summary}
-
-🔄 Retrogrades: ${reading.body.match(/🔄 Retrogrades:([^<]+)/)?.[1]?.replace(/<[^>]+>/g, '').trim() || 'None'}
-🔗 Aspects: ${reading.body.match(/🔗 Key Aspects:([^<]+)/)?.[1]?.replace(/<[^>]+>/g, '').trim() || 'None'}
-✅ Favored: ${reading.body.match(/✅ Favored:([^<]+)/)?.[1]?.replace(/<[^>]+>/g, '').trim() || 'None'}
-⚠️ Avoid: ${reading.body.match(/⚠️ Avoid:([^<]+)/)?.[1]?.replace(/<[^>]+>/g, '').trim() || 'None'}
-
-📊 Overall: ${reading.body.match(/📊 Overall:([^<]+)/)?.[1]?.replace(/<[^>]+>/g, '').trim() || ''}
-
-— Generated by Oracle Star Map`;
-
-      // Populate modal
-      modalTitle.value = title;
-      modalDateTime.value = toInputValue(currentDate);
-      modalDescription.value = description;
-      
-      modal.style.display = 'flex';
-    });
-
     // Close modal
     document.getElementById('closeModal').addEventListener('click', () => {
       modal.style.display = 'none';
@@ -2206,7 +2127,7 @@ Please analyze the astrological timing, suggest the best way to navigate this ev
       
       try {
         // Try Hermes MCP gateway first
-        const response = await fetch('http://127.0.0.1:8081/calendar/create', {
+        const response = await fetch('/calendar-events/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(eventData)
@@ -2262,8 +2183,9 @@ Please analyze the astrological timing, suggest the best way to navigate this ev
     });
 
     drawerToggle.addEventListener('click', () => {
+      const leftOpen = leftPanel.classList.toggle('open');
       rightPanel.classList.toggle('open');
-      drawerToggle.textContent = rightPanel.classList.contains('open') ? '❮' : '❯';
+      drawerToggle.textContent = leftOpen ? '❮' : '❯';
     });
 
     datetimeInput.addEventListener('change', () => updateFromDate(fromInputValue(datetimeInput.value)));
@@ -2331,6 +2253,68 @@ Please analyze the astrological timing, suggest the best way to navigate this ev
 
     // Load calendar into left panel
     loadCalendarIntoPanel();
+
+    // Click-to-copy feature for left/right panel content
+    function setupClickToCopy() {
+      const leftPanel = document.getElementById('leftPanel');
+      const rightPanel = document.getElementById('rightPanel');
+      
+      // All clickable element types
+      const clickableSelectors = [
+        '.card', '.element-pill', '.planet-row', '.aspect-item', '.angle-card',
+        '.section h3', '.collapsible-toggle', '.calendar-event-row',
+        '#positions > div', '#elements', '#aspectsList > div',
+        '#minorAspects > div', '#natalAngles > div', '#harmonics > div',
+        '#readingBody > div', '.reading-section', '#planetInfo > div',
+        'li', '.list-item'
+      ].join(', ');
+      
+      function handlePanelClick(e) {
+        // Find closest clickable element
+        const target = e.target.closest(clickableSelectors);
+        if (!target || target === e.target.closest('.panel')) return;
+        
+        // Skip if clicking on buttons/inputs
+        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+        
+        // Extract context text
+        let context = '';
+        const text = target.textContent.trim();
+        const heading = target.querySelector('strong, h3, h4, .title');
+        
+        if (heading) {
+          context = `${heading.textContent.trim()}: ${text}`;
+        } else {
+          context = text;
+        }
+        
+        // Clean up and create prompt
+        const prompt = `Tell me more about this: ${context.replace(/\s+/g, ' ')}`;
+        
+        // Copy to clipboard
+        navigator.clipboard.writeText(prompt).then(() => {
+          // Show toast
+          const toast = document.createElement('div');
+          toast.id = 'copyToast';
+          toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(20,20,25,0.95);color:#fff;padding:12px 20px;border-radius:8px;font-size:0.9rem;z-index:10000;box-shadow:0 4px 20px rgba(0,0,0,0.5);border:1px solid rgba(201,168,76,0.3);';
+          toast.textContent = 'Copied! Paste in Oracle for explanation';
+          document.body.appendChild(toast);
+          
+          setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            setTimeout(() => toast.remove(), 300);
+          }, 3000);
+        }).catch(err => {
+          console.log('Copy failed:', err);
+        });
+      }
+      
+      leftPanel?.addEventListener('click', handlePanelClick);
+      rightPanel?.addEventListener('click', handlePanelClick);
+    }
+    
+    setupClickToCopy();
 
     function animate() {
       requestAnimationFrame(animate);

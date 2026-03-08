@@ -54,4 +54,4 @@ echo "  2. Edit: ~/.hermes/oracle/.env"
 echo "  3. Update your birth info in profiles.json"
 echo "  4. Run: /oracle"
 echo ""
-echo '"Millionaires study markets, billionaires study the stars"'
+echo '"Millionaires study markets, billionaires study stars"'

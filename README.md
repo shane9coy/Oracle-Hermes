@@ -1,8 +1,8 @@
 # ✧🔮  Oracle — AI Astrology Companion ✧
 
-*"Millionaires study markets, billionaires study the stars"*
+![oracle](https://github.com/user-attachments/assets/5ef3a46a-564a-4aaa-9601-4a93194c1168)
 
-Oracle is an AI-powered astrology companion that integrates with Hermes Agent to provide cosmic timing guidance, natal chart analysis, and intelligent calendar overlays.
+Oracle is an AI-powered astrology companion that integrates with Hermes Agent to provide cosmic timing guidance, natal chart analysis, and intelligent calendar management in coherence with astrological knowledge used by history's most powerful figures.
 
 ## Features
 

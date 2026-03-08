@@ -9,7 +9,7 @@ from oracle_profiles import get_active_profile, list_profiles, select_profile
 from oracle_utils import ensure_runtime_dirs, get_active_profile_id
 
 # Keep quote for JSON output compatibility
-ORACLE_QUOTE = "Millionaires study markets, billionaires study the stars"
+ORACLE_QUOTE = "Millionaires study markets, billionaires study stars"
 
 
 def _profile_name(entry: dict[str, Any], profile: dict[str, Any]) -> str:
@@ -68,7 +68,7 @@ def _print_profile_ready(entry: dict[str, Any], validation: dict[str, Any]) -> N
     print()
 
 
-ORACLE_QUOTE = "Millionaires study markets, billionaires study the stars"
+ORACLE_QUOTE = "Millionaires study markets, billionaires study stars"
 
 
 def launch_oracle_for_cli(*, user_instruction: str = "", interactive: bool = True, plain: bool = False) -> str:

@@ -5,7 +5,7 @@ from typing import Iterable
 
 ORACLE_TITLE = "ORACLE"
 ORACLE_QUOTE = (
-    "Millionaires study markets, billionaires study the stars"
+    "Millionaires study markets, billionaires study stars"
 )
 
 try:  # optional enhancement

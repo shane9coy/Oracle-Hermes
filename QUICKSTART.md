@@ -54,4 +54,4 @@ python server.py
 
 ---
 
-*"Millionaires study markets, billionaires study the stars"*
+*"Millionaires study markets, billionaires study stars"*
