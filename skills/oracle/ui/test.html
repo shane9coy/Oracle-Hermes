@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Chart</title>
+  <style>
+    body { margin: 0; background: #000; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <div id="info" style="color: white; padding: 20px; font-family: sans-serif;">
+    Loading...
+  </div>
+  <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+  <script>
+    document.getElementById('info').textContent = 'Three.js loaded, setting up scene...';
+    
+    const scene = new THREE.Scene();
+    document.getElementById('info').textContent = 'Scene created';
+    
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
+    
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+    
+    document.getElementById('info').textContent = 'Renderer created';
+    
+    // Add a simple cube
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
+    
+    document.getElementById('info').textContent = 'Cube added to scene';
+    
+    function animate() {
+      requestAnimationFrame(animate);
+      cube.rotation.x += 0.01;
+      cube.rotation.y += 0.01;
+      renderer.render(scene, camera);
+    }
+    
+    document.getElementById('info').textContent = 'Starting animation loop...';
+    animate();
+  </script>
+</body>
+</html>

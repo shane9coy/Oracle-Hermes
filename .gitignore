@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config (keep templates)
+*.local.yaml
+*.local.json
+
+# Cache
+.cache/
+*.cache
+
+# Secrets (use .env.example)
+.env
+.env.local
+
+# Build
+dist/
+build/
+*.egg

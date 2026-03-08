@@ -1,0 +1,2344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Oracle Star Map</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --space: #0a0e1a;
+      --gold: #c9a84c;
+      --bone: #f0e6d3;
+      --sage: #7a9b8a;
+      --fire: #d35a4b;
+      --earth: #6b8f61;
+      --air: #8467d7;
+      --water: #4f7fd9;
+      --panel: rgba(10, 14, 26, 0.86);
+      --panel-border: rgba(201, 168, 76, 0.35);
+      --muted: rgba(240, 230, 211, 0.74);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(circle at top, #16203a, var(--space) 58%); color: var(--bone); font-family: 'DM Sans', sans-serif; }
+    h1, h2, h3, .serif { font-family: 'Cormorant Garamond', serif; letter-spacing: 0.03em; }
+    button, input { font: inherit; }
+
+    #app { position: relative; width: 100%; height: 100%; }
+    #scene { position: absolute; inset: 0; }
+
+    .panel {
+      position: absolute;
+      top: 20px;
+      bottom: 82px;
+      width: 320px;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(16px);
+      border-radius: 18px;
+      padding: 18px;
+      overflow: auto;
+      box-shadow: 0 16px 60px rgba(0,0,0,0.35);
+    }
+
+    #leftPanel { left: 20px; }
+    #rightPanel {
+      right: 20px;
+      transform: translateX(calc(100% - 56px));
+      transition: transform 220ms ease;
+      padding-right: 64px;
+    }
+    #rightPanel.open { transform: translateX(0); }
+
+    #drawerToggle {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      border: 1px solid var(--panel-border);
+      background: rgba(10, 14, 26, 0.9);
+      color: var(--bone);
+      cursor: pointer;
+      z-index: 100;
+    }
+
+    .title { margin: 0 0 4px; font-size: 2rem; }
+    .subtitle { color: var(--muted); margin: 0 0 16px; font-size: 0.92rem; line-height: 1.45; }
+    .section { margin: 18px 0 0; }
+    .section h3 { margin: 0 0 10px; font-size: 1.25rem; color: var(--gold); }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .stack { display: grid; gap: 10px; }
+    label { font-size: 0.82rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    input[type="datetime-local"] {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--bone);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    button.action {
+      background: linear-gradient(180deg, rgba(201,168,76,0.22), rgba(201,168,76,0.12));
+      color: var(--bone);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: transform 120ms ease, background 160ms ease;
+    }
+    button.action:hover { transform: translateY(-1px); background: linear-gradient(180deg, rgba(201,168,76,0.32), rgba(201,168,76,0.16)); }
+    button.action.active { background: linear-gradient(180deg, rgba(201,168,76,0.45), rgba(201,168,76,0.25)); border-color: var(--gold); }
+
+    .pill {
+      display: inline-flex;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--muted);
+      background: rgba(255,255,255,0.03);
+    }
+    .legend { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+    .legend .pill::before { content: ''; width: 10px; height: 10px; border-radius: 999px; margin-right: 8px; display: inline-block; }
+    .legend .fire::before { background: var(--fire); }
+    .legend .earth::before { background: var(--earth); }
+    .legend .air::before { background: var(--air); }
+    .legend .water::before { background: var(--water); }
+
+    /* Element tooltips */
+    .element-pill {
+      display: inline-flex;
+      align-items: center;
+      position: relative;
+      cursor: help;
+      transition: all 0.2s ease;
+    }
+    .element-pill:hover {
+      background: rgba(255,255,255,0.1);
+      transform: translateY(-2px);
+    }
+    .element-pill .count {
+      font-weight: bold;
+      margin-left: 6px;
+      font-size: 0.9em;
+    }
+    .element-tooltip {
+      visibility: hidden;
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 20, 25, 0.95);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      padding: 12px 14px;
+      width: 220px;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: var(--bone);
+      z-index: 100;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+      margin-bottom: 10px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .element-pill:hover .element-tooltip {
+      visibility: visible;
+      opacity: 1;
+    }
+    .element-tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 8px solid transparent;
+      border-top-color: rgba(20, 20, 25, 0.95);
+    }
+    .element-tooltip strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.9rem;
+    }
+    .element-tooltip .planets {
+      color: var(--gold);
+      font-size: 0.75rem;
+      margin-top: 6px;
+      opacity: 0.8;
+    }
+
+    /* Angle tooltips */
+    .angle-card {
+      cursor: help;
+      transition: all 0.2s ease;
+    }
+    .angle-card:hover {
+      background: rgba(255,255,255,0.08);
+      transform: translateX(4px);
+    }
+    .angle-card .angle-tooltip {
+      display: none;
+      position: absolute;
+      left: 100%;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(20, 20, 25, 0.95);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      padding: 12px 14px;
+      width: 250px;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: var(--bone);
+      z-index: 100;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+      margin-left: 15px;
+    }
+    .angle-card:hover .angle-tooltip {
+      display: block;
+    }
+    .angle-tooltip::before {
+      content: '';
+      position: absolute;
+      right: 100%;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 8px solid transparent;
+      border-right-color: rgba(20, 20, 25, 0.95);
+    }
+
+    .list { display: grid; gap: 8px; }
+    .card {
+      padding: 12px 12px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .card strong { display: block; }
+    .card small { color: var(--muted); line-height: 1.4; }
+    .card.event { cursor: pointer; }
+    .card.event:hover { border-color: rgba(201,168,76,0.45); }
+
+    #bottomBar {
+      position: absolute;
+      left: 20px;
+      right: 20px;
+      bottom: 18px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 16px;
+      border-radius: 16px;
+      background: rgba(10, 14, 26, 0.88);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(12px);
+      font-size: 0.95rem;
+    }
+
+    #tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(8, 10, 16, 0.95);
+      border: 1px solid rgba(201,168,76,0.5);
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: var(--bone);
+      font-size: 0.84rem;
+      display: none;
+      z-index: 4;
+      min-width: 160px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    }
+
+    .muted { color: var(--muted); }
+    .reading-body { display: grid; gap: 12px; line-height: 1.55; }
+    .tiny { font-size: 0.75rem; color: var(--muted); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    
+    /* Modal Styles */
+    .modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); }
+    .modal-content {
+      position: relative; background: var(--panel); border: 1px solid var(--panel-border);
+      border-radius: 16px; padding: 20px; width: 90%; max-width: 480px; max-height: 85vh;
+      overflow-y: auto; box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .modal-header h3 { margin: 0; color: var(--gold); font-size: 1.3rem; }
+    .modal-body label { display: block; margin-bottom: 6px; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="scene"></div>
+
+    <div id="leftPanel" class="panel">
+      <h1 class="title">✧ Oracle ✧</h1>
+      <p class="subtitle">"Millionaires study markets, billionaires study the stars"</p>
+
+      <div class="stack">
+        <label for="datetimeInput">Date & time</label>
+        <input id="datetimeInput" type="datetime-local" />
+        <div class="row">
+          <button id="nowButton" class="action">Now</button>
+          <button id="animateButton" class="action">Animate Day</button>
+          <button id="shareButton" class="action">Copy Link</button>
+        </div>
+        <div class="row" style="margin-top: 8px;">
+          <button id="natalButton" class="action active">Natal</button>
+          <button id="transitButton" class="action">Transits</button>
+        </div>
+        <div class="row" style="margin-top: 8px;">
+          <button id="anglesButton" class="action">Show Natal Angles</button>
+        </div>
+      </div>
+
+      <!-- Calendar Section (collapsible) -->
+      <div class="section">
+        <h3 class="collapsible-toggle" data-section="calendar" style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+          📅 Calendar <span class="collapsible-arrow" data-section="calendar">▾</span>
+        </h3>
+        <div id="calendarSectionContent" class="collapsible-content" style="display: block;">
+          <div id="calendarEventsList" style="display: grid; gap: 6px;"></div>
+        </div>
+      </div>
+
+      <!-- Natal Planet Info (collapsible) -->
+      <div class="section">
+        <h3 class="collapsible-toggle" data-section="planetInfo" style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+          Natal Planet Info <span class="collapsible-arrow" data-section="planetInfo">▾</span>
+        </h3>
+        <div id="planetInfoContent" class="collapsible-content"></div>
+      </div>
+
+      <!-- Elements (collapsible) -->
+      <div class="section">
+        <h3 class="collapsible-toggle" data-section="elements" style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+          Elements <span class="collapsible-arrow" data-section="elements">▾</span>
+        </h3>
+        <div id="elementsContent" class="collapsible-content">
+          <div class="legend">
+            <span class="pill fire">Fire</span>
+            <span class="pill earth">Earth</span>
+            <span class="pill air">Air</span>
+            <span class="pill water">Water</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Planetary Positions (collapsible) -->
+      <div class="section">
+        <h3 class="collapsible-toggle" data-section="positions" style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+          Planetary Positions <span class="collapsible-arrow" data-section="positions">▾</span>
+        </h3>
+        <div id="positions" class="collapsible-content list"></div>
+      </div>
+
+      <!-- Angles & Houses (collapsible) -->
+      <div class="section">
+        <h3 class="collapsible-toggle" data-section="angles" style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+          Angles & Houses <span class="collapsible-arrow" data-section="angles">▾</span>
+        </h3>
+        <div id="angles" class="collapsible-content list"></div>
+      </div>
+
+      <!-- Minor Aspects (collapsible) -->
+      <div class="section">
+        <h3 class="collapsible-toggle" data-section="minorAspects" style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+          Minor Aspects <span class="collapsible-arrow" data-section="minorAspects">▾</span>
+        </h3>
+        <div id="minorAspects" class="collapsible-content list"></div>
+      </div>
+
+      <!-- Chakra (collapsible) -->
+      <div class="section">
+        <h3 class="collapsible-toggle" data-section="chakra" style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+          🌀 Chakra <span class="collapsible-arrow" data-section="chakra">▾</span>
+        </h3>
+        <div id="chakra" class="collapsible-content list"></div>
+      </div>
+    </div>
+
+    <div id="rightPanel" class="panel open">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <h2 class="title">Reading</h2>
+        <button id="addToCalendar" class="action" style="padding: 6px 12px;font-size:1.2rem;" title="Add to Google Calendar">+</button>
+      </div>
+      <div class="reading-body" id="readingBody"></div>
+      <div class="section">
+        <h3>Notes</h3>
+        <p class="tiny">The planetary motion in this file uses lightweight browser-side approximations so it can run as a standalone HTML file. Treat this as a visual companion. For authoritative guidance, Oracle should still use Astrovisor-backed calculations in Hermes.</p>
+      </div>
+    </div>
+
+    <button id="drawerToggle">❮</button>
+
+    <!-- Calendar Event Modal -->
+    <div id="calendarModal" class="modal" style="display: none;">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Add to Google Calendar</h3>
+          <button id="closeModal" class="action" style="padding: 4px 10px;">✕</button>
+        </div>
+        <div class="modal-body">
+          <label>Title</label>
+          <input type="text" id="eventTitle" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--bone); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+          
+          <label>Date & Time</label>
+          <input type="datetime-local" id="eventDateTime" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--bone); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+          
+          <label>Summary</label>
+          <textarea id="eventDescription" rows="10" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--bone); border-radius: 8px; padding: 10px; font-family: inherit; resize: vertical;"></textarea>
+          
+          <div class="row" style="margin-top: 16px;">
+            <button id="saveToGoogle" class="action" style="flex: 1;">Save to Google Calendar</button>
+          </div>
+          <div class="row" style="margin-top: 8px;">
+            <button id="copyEvent" class="action" style="flex: 1; background: rgba(255,255,255,0.05);">Copy to Clipboard</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="bottomBar">
+      <button id="calendarToggle" class="action" style="font-size: 1.1rem;">📅</button>
+      <div id="statusLeft">Moon phase pending...</div>
+      <div id="statusCenter" class="muted">Click an event to snap the chart to that moment</div>
+      <div id="statusRight">Mercury status pending...</div>
+    </div>
+
+    <!-- Bottom Calendar Panel -->
+    <div id="calendarPanel" style="display: none; position: fixed; bottom: 60px; left: 20px; right: 20px; height: 300px; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 16px; padding: 16px; z-index: 50; box-shadow: 0 -8px 40px rgba(0,0,0,0.4);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h3 style="margin: 0; color: var(--gold);">📅 Your Calendar</h3>
+        <button id="minimizeCalendar" class="action" style="padding: 4px 10px;">▾</button>
+      </div>
+      <div id="calendarPanelContent" style="height: calc(100% - 50px); overflow-y: auto;"></div>
+    </div>
+
+    <div id="tooltip"></div>
+  </div>
+
+  <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script>
+    // Debug - catch all errors
+    window.onerror = function(msg, url, line, col, error) {
+      document.getElementById('leftPanel').innerHTML = 
+        '<h3>Error:</h3><pre>' + msg + '\nLine: ' + line + '</pre>';
+      return true;
+    };
+    
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('Starting chart...');
+      
+      // Load cached natal data from server (with cache-bust)
+      const cacheBust = new Date().getTime();
+      fetch(`/natal-data?v=${cacheBust}`)
+        .then(res => res.json())
+        .then(cachedData => {
+          console.log('Loaded cached natal data:', Object.keys(cachedData));
+          window.cachedNatalData = cachedData;
+          
+          // Update document title with user name
+          if (cachedData._profile && cachedData._profile.preferred_name) {
+            document.title = `Oracle Star Map — ${cachedData._profile.preferred_name}`;
+          }
+          
+          // Populate right panel with real natal data
+          if (cachedData.natal_chart) {
+            const natal = cachedData.natal_chart;
+            const planets = natal.planets || {};
+            const houses = natal.houses || {};
+            
+            // Update title with real natal info
+            const titleEl = document.querySelector('#leftPanel h1.title');
+            if (titleEl) {
+              const sun = planets.Sun?.sign || 'Leo';
+              const moon = planets.Moon?.sign || 'Capricorn';
+              const asc = houses.ascendant?.sign || 'Sagittarius';
+              titleEl.textContent = `☀ ${sun} ☽ ${moon} ↑ ${asc}`;
+            }
+            
+            // Update planets section with real data
+            const positionsEl = document.getElementById('positions');
+            if (positionsEl && planets) {
+              let html = '';
+              for (const [pname, pdata] of Object.entries(planets)) {
+                if (['Sun','Moon','Mercury','Venus','Mars','Jupiter','Saturn','Uranus','Neptune','Pluto'].includes(pname)) {
+                  html += `<div class="card" style="font-size: 0.85rem; padding: 6px 8px;">
+                    <strong style="color: #ffd700">${pname}</strong> ${pdata.sign} ${pdata.degree_in_sign?.toFixed(1)}°${pdata.retrograde ? ' <span style="color:#d35a4b">Rx</span>' : ''}
+                  </div>`;
+                }
+              }
+              positionsEl.innerHTML = html;
+            }
+            
+            // Update angles with real data
+            const anglesEl = document.getElementById('angles');
+            if (anglesEl && houses) {
+              let html = '';
+              const angleMap = {'ascendant': '↑ Ascendant', 'midheaven': 'MC Midheaven', 'descendant': '↓ Descendant', 'ic': 'IC Imum Coeli'};
+              for (const [akey, aname] of Object.entries(angleMap)) {
+                if (houses[akey]) {
+                  html += `<div class="card" style="font-size: 0.8rem;">
+                    <strong style="color: #88aaff">${aname}</strong> ${houses[akey].sign} ${houses[akey].degree_in_sign?.toFixed(1)}°
+                  </div>`;
+                }
+              }
+              // Add houses
+              html += '<div style="margin: 8px 0; opacity: 0.5; text-align: center;">— Houses —</div>';
+              for (let i = 1; i <= 12; i++) {
+                const hkey = 'house_' + i;
+                if (houses[hkey]) {
+                  html += `<div class="card" style="opacity: 0.65; font-size: 0.8rem;">
+                    <strong style="color: #88aaff">House ${i}</strong> ${houses[hkey].sign}
+                  </div>`;
+                }
+              }
+              anglesEl.innerHTML = html;
+            }
+          }
+          
+          // Populate minor aspects from cache
+          if (cachedData.minor_aspects) {
+            const ma = cachedData.minor_aspects;
+            const minorAspectsEl = document.getElementById('minorAspects');
+            if (minorAspectsEl && ma.minor_aspects && ma.minor_aspects.aspects) {
+              const aspectsData = ma.minor_aspects.aspects;
+              let html = '<div style="font-size: 0.75rem;">';
+              for (const [type, aspectsList] of Object.entries(aspectsData)) {
+                if (aspectsList && aspectsList.length > 0) {
+                  html += `<div style="margin: 8px 0 4px; color: #ffd700; font-weight: bold;">${type.charAt(0).toUpperCase() + type.slice(1)}</div>`;
+                  for (const a of aspectsList.slice(0,3)) {
+                    html += `<div style="padding: 2px 0; opacity: 0.7;">${a.planet1} ☌ ${a.planet2}</div>`;
+                  }
+                }
+              }
+              html += '</div>';
+              minorAspectsEl.innerHTML = html;
+            }
+            
+            // Render Chakra section if data available
+            const chakraEl = document.getElementById('chakra');
+            if (chakraEl && cachedData.chakra) {
+              const chakra = cachedData.chakra;
+              let chakraHtml = '<div style="display:grid;gap:8px;">';
+              
+              if (chakra.chakras && Array.isArray(chakra.chakras)) {
+                for (const c of chakra.chakras) {
+                  const color = c.color || '#9b59b6';
+                  chakraHtml += `<div style="padding:8px;background:rgba(0,0,0,0.3);border-left:3px solid ${color};border-radius:4px;">
+                    <div style="font-weight:bold;color:${color};">${c.name || c.chakra}</div>
+                    <div style="font-size:0.85rem;opacity:0.8;">${c.description || c.interpretation || ''}</div>
+                  </div>`;
+                }
+              } else if (chakra.analysis) {
+                // Alternative format
+                for (const [name, data] of Object.entries(chakra.analysis)) {
+                  chakraHtml += `<div style="padding:8px;background:rgba(0,0,0,0.3);border-left:3px solid #9b59b6;border-radius:4px;">
+                    <div style="font-weight:bold;color:#9b59b6;">${name}</div>
+                    <div style="font-size:0.85rem;opacity:0.8;">${JSON.stringify(data)}</div>
+                  </div>`;
+                }
+              } else {
+                chakraHtml += '<p style="opacity:0.6;">Chakra data available. Click to request full analysis.</p>';
+              }
+              chakraHtml += '</div>';
+              chakraEl.innerHTML = chakraHtml;
+            } else if (chakraEl) {
+              chakraEl.innerHTML = '<p style="opacity:0.6;">No chakra data cached. Request via Oracle menu.</p>';
+            }
+          }
+        })
+        .catch(err => console.log('Could not load natal cache:', err));
+    });
+    const zodiac = [
+      { name: 'Aries', glyph: '♈', element: 'fire' },
+      { name: 'Taurus', glyph: '♉', element: 'earth' },
+      { name: 'Gemini', glyph: '♊', element: 'air' },
+      { name: 'Cancer', glyph: '♋', element: 'water' },
+      { name: 'Leo', glyph: '♌', element: 'fire' },
+      { name: 'Virgo', glyph: '♍', element: 'earth' },
+      { name: 'Libra', glyph: '♎', element: 'air' },
+      { name: 'Scorpio', glyph: '♏', element: 'water' },
+      { name: 'Sagittarius', glyph: '♐', element: 'fire' },
+      { name: 'Capricorn', glyph: '♑', element: 'earth' },
+      { name: 'Aquarius', glyph: '♒', element: 'air' },
+      { name: 'Pisces', glyph: '♓', element: 'water' },
+    ];
+
+    const elementColors = {
+      fire: '#d35a4b',
+      earth: '#6b8f61',
+      air: '#8467d7',
+      water: '#4f7fd9',
+    };
+
+    // Planet meanings in each sign (abbreviated interpretations)
+    const planetMeanings = {
+      Sun: {
+        Aries: "Your core identity burns with pioneering fire. You lead with confidence and originality, though watch for impatience. Self-expression is natural and bold.",
+        Taurus: "You find security through material stability and sensual pleasure. Your identity is tied to possessions and aesthetics. Stubborn but loyal.",
+        Gemini: "Your mind is your greatest tool—curious, communicative, and adaptable. You express yourself through ideas and connections.",
+        Cancer: "Your identity is rooted in home, family, and emotional security. Nurturing others fulfills you. Sensitivity is your strength.",
+        Leo: "Creative self-expression defines you. You're generous, warm-hearted, and draw attention naturally. Drama and play are essential.",
+        Virgo: "You find identity through service and mastery. Detail-oriented and analytical, you express yourself through improving systems.",
+        Libra: "Your sense of self comes through relationships and harmony. You seek balance and partnership as key to identity.",
+        Scorpio: "Intensity and transformation define your core. You penetrate to the truth and are drawn to mysteries. Emotional depth is your power.",
+        Sagittarius: "Your identity expands through adventure and philosophy. Optimistic and truth-seeking, you inspire others through conviction.",
+        Capricorn: "Ambition and discipline shape your identity. You achieve through structure and patience. Responsibility is your crown.",
+        Aquarius: "Your uniqueness lies in individuality and humanitarian ideals. Visionary and unconventional, you march to your own drum.",
+        Pisces: "Your identity dissolves boundaries—empathy, creativity, and spirituality are your domain. You're the dreamer and healer."
+      },
+      Moon: {
+        Aries: "Your emotional nature is quick and bold. Feelings arise spontaneously with passionate intensity. You act on impulses.",
+        Taurus: "You crave emotional security through stability and comfort. Feelings are slow to change but deeply loyal. Sensual pleasures calm you.",
+        Gemini: "Your emotions shift with your thoughts—curious, adaptable, and communicative. You process feelings through talking.",
+        Cancer: "Emotions run deep and tied to home and family. Intuitive and protective, you nurture through emotional attunement.",
+        Leo: "You express emotions with drama and generosity. Need for recognition and appreciation drives your emotional world.",
+        Virgo: "Emotions are analyzed and expressed through service. You feel by helping others. Practical comfort matters deeply.",
+        Libra: "You seek emotional harmony in relationships. Decisions require balance of feelings. Diplomacy defines your emotional expression.",
+        Scorpio: "Emotions run intense and transformative. You feel deeply and suspect hidden depths in others. Loyalty is absolute.",
+        Sagittarius: "Emotional nature is optimistic and adventurous. You feel through exploration and philosophy. Freedom is emotional oxygen.",
+        Capricorn: "Emotions are controlled and reserved. You build emotional security through achievement. Guarded but deeply loyal.",
+        Aquarius: "Emotions are intellectualized and unconventional. You value freedom and humanitarian bonds over traditional attachment.",
+        Pisces: "You feel everything empathetically—deeply sensitive and intuitive. Creative and spiritual, boundaries blur for you."
+      },
+      Mercury: {
+        Aries: "Quick, direct communication with a pioneering edge. You think fast and speak your mind. Patience in discussions needed.",
+        Taurus: "Practical, methodical thinking. You prefer slow, deliberate communication. Words carry weight and stubborn conviction.",
+        Gemini: "Quick-witted, curious, and versatile. You think in threads and love gathering information. Social communicator.",
+        Cancer: "Intuitive, sensitive communication tied to emotions. You read between the lines. Memory and past inform thoughts.",
+        Leo: "Dramatic, confident self-expression in conversation. You speak to be seen and appreciated. Creative storyteller.",
+        Virgo: "Analytical, detailed thinking with practical focus. You communicate through service and improvement. Critical mind.",
+        Libra: "Balanced, diplomatic communication. You weigh perspectives and seek harmony in discourse. Social and charming.",
+        Scorpio: "Intense, penetrating thought that gets to truth. You communicate with emotional depth and suspicion of surfaces.",
+        Sagittarius: "Philosophical, optimistic thinking. You communicate through adventure and big ideas. Truth-seeking and blunt.",
+        Capricorn: "Structured, ambitious communication. You think in terms of achievement and status. Conservative speaker.",
+        Aquarius: "Original, unconventional thinking. You communicate innovative ideas with detachment. Humanitarian focus.",
+        Pisces: "Intuitive, imaginative thought. You communicate through creativity and empathy. May struggle with boundaries."
+      },
+      Venus: {
+        Aries: "Passionate, direct romance with a pioneering spirit. You pursue love boldly and fear rejection. Generous lover.",
+        Taurus: "Sensual, stable love tied to comfort and aesthetics. Loyalty and physical pleasure define your romantic style.",
+        Gemini: "Playful, curious romance with intellectual connection. You flirt through conversation and variety. Detached emotionally.",
+        Cancer: "Romantic, nurturing love tied to home and family. Deep emotional connection and loyalty. Traditional values.",
+        Leo: "Dramatic, generous romance with need for appreciation. You love being adored and shower partners with attention.",
+        Virgo: "Practical, service-oriented love shown through acts of devotion. You can be critical but deeply loyal.",
+        Libra: "Harmonious, diplomatic romance seeking balance. Partnership is essential. You flirt with charm and fairness.",
+        Scorpio: "Intense, transformative love with emotional depth. You seek complete fusion. Jealous but loyal.",
+        Sagittarius: "Adventurous, optimistic romance with need for freedom. You love through exploration and philosophy.",
+        Capricorn: "Reserved, ambitious love seeking stability. You express love through commitment and achievement.",
+        Aquarius: "Unconventional, independent love with humanitarian values. You love freely without possessiveness.",
+        Pisces: "Romantic, compassionate love that dissolves boundaries. You love unconditionally and can be escapist."
+      },
+      Mars: {
+        Aries: "Bold, pioneering energy with quick action. You lead with confidence and may rush in. Courage defines you.",
+        Taurus: "Steady, persistent energy with material focus. You achieve through determination and stubborn persistence.",
+        Gemini: "Quick, versatile energy expressed through communication. You move in many directions. Mental aggression.",
+        Cancer: "Emotional, protective energy tied to home. You act through nurturing and defending loved ones. Reactive.",
+        Leo: "Dramatic, creative energy with need for recognition. You express yourself boldly andGenerously. Prideful.",
+        Virgo: "Practical, efficient energy focused on service. You perfect through detailed work. Critical of inefficiency.",
+        Libra: "Diplomatic, harmonious energy through partnership. You achieve through balance and fairness. Indecision.",
+        Scorpio: "Intense, transformative energy with deep focus. You pursue truth and power. Strategic and secretive.",
+        Sagittarius: "Adventurous, optimistic energy with philosophical focus. You expand through exploration. Restless.",
+        Capricorn: "Ambitious, disciplined energy seeking achievement. You climb methodically. Impatient with weakness.",
+        Aquarius: "Original, unconventional energy with humanitarian focus. You disrupt systems innovatively. Detached.",
+        Pisces: "Compassionate, intuitive energy with creative flow. You adapt and merge with surroundings. Escapist."
+      },
+      Jupiter: {
+        Aries: "Bold expansion with pioneering optimism. You grow through self-confidence and new beginnings. Faith runs strong.",
+        Taurus: "Growth through material stability and sensual pleasure. You expand resources and values. Pragmatic optimism.",
+        Gemini: "Curious, versatile expansion through ideas and communication. You grow by learning and sharing knowledge.",
+        Cancer: "Emotional growth through home, family, and intuition. You expand through nurturing and creating security.",
+        Leo: "Creative self-expression and generous expansion. You grow through drama, romance, and leadership.",
+        Virgo: "Growth through service, health, and practical mastery. You expand by perfecting systems and helping others.",
+        Libra: "Growth through partnerships and harmonious relationships. You expand through fairness and justice.",
+        Scorpio: "Deep transformation and intense growth. You grow through facing shadows and rebuilding. Research focus.",
+        Sagittarius: "Philosophical expansion through adventure and travel. You grow through faith and teaching.",
+        Capricorn: "Ambitious growth through discipline and achievement. You expand through building lasting structures.",
+        Aquarius: "Unconventional expansion through innovation and humanity. You grow by questioning norms.",
+        Pisces: "Spiritual expansion through compassion and creativity. You grow through surrender and faith."
+      },
+      Saturn: {
+        Aries: "Disciplined self-expression with pioneering restraint. You learn patience in leading. Building confidence slowly.",
+        Taurus: "Structured approach to material security. You learn through restriction and earning. Practical lessons.",
+        Gemini: "Mental discipline and structured communication. You learn through limits on flexibility. Serious thinking.",
+        Cancer: "Emotional restraint and building security. You learn through boundaries and family responsibilities.",
+        Leo: "Disciplined creative expression and earned recognition. You learn through delays in self-expression.",
+        Virgo: "Perfectionist discipline in service and health. You learn through criticism and detail mastery.",
+        Libra: "Diplomatic discipline in relationships. You learn through balance and partnership responsibilities.",
+        Scorpio: "Intense transformation through facing fears. You learn through power dynamics and depth.",
+        Sagittarius: "Philosophical discipline through life's lessons. You learn through belief systems and expansion limits.",
+        Capricorn: "Ambitious discipline and earned achievement. You learn through responsibility and structure.",
+        Aquarius: "Unconventional discipline with humanitarian focus. You learn through breaking and rebuilding systems.",
+        Pisces: "Spiritual discipline through boundaries and compassion. You learn through illusion and surrender."
+      },
+      Uranus: {
+        Aries: "Revolutionary self-expression with sudden insights. You break new ground independently. Unexpected changes.",
+        Taurus: "Unconventional approach to values and resources. You rebel against material restrictions. Innovative earning.",
+        Gemini: "Brilliant, erratic communication and mental rebellion. You spark sudden ideas. Unpredictable thinker.",
+        Cancer: "Unconventional home and emotional patterns. You break family norms. Sudden household changes.",
+        Leo: "Dramatic creative breakthroughs and independent self-expression. You shine differently. Eccentric creativity.",
+        Virgo: "Innovative service and health approaches. You rebel through perfection systems. Unexpected improvements.",
+        Libra: "Revolutionary partnerships and unusual relationships. You disrupt harmony norms. Unique equality.",
+        Scorpio: "Intense transformation through upheaval. You experience sudden rebirths. Deep secret revelations.",
+        Sagittarius: "Adventurous rebellion and philosophical breakthroughs. You expand through unexpected journeys.",
+        Capricorn: "Unconventional ambition and structural innovation. You reform institutions. Unexpected achievement.",
+        Aquarius: "Unique individuality and humanitarian revolution. You embody the future. Radical originality.",
+        Pisces: "Spiritual innovation and intuitive breakthroughs. You dissolve boundaries unexpectedly. Creative genius."
+      },
+      Neptune: {
+        Aries: "Pioneering ideals with spiritual fire. You dream of new beginnings. May struggle with illusion in action.",
+        Taurus: "Idealistic values tied to beauty and comfort. You dream of material security. Romantic illusions.",
+        Gemini: "Idealistic communication and versatile imagination. You envision through ideas. Fantasy thinking.",
+        Cancer: "Intuitive emotional depths and nurturing dreams. You feel the collective. Nostalgic illusions.",
+        Leo: "Dramatic creative vision and romantic idealism. You dream of recognition. Creative inspiration.",
+        Virgo: "Idealized service and health consciousness. You envision perfection. Healing or illusion in service.",
+        Libra: "Idealized partnerships and harmony. You seek soulmate connections. Relationship illusions.",
+        Scorpio: "Deep transformative spirituality and psychic ability. You penetrate mysteries. Shadow work.",
+        Sagittarius: "Philosophical spirituality and adventurous faith. You dream of truth. Idealistic beliefs.",
+        Capricorn: "Ambition tied to spiritual values. You build on dreams. Responsible idealism.",
+        Aquarius: "Humanitarian vision and unconventional spirituality. You envision the future. Collective dreaming.",
+        Pisces: "Universal compassion and creative inspiration. You merge with the divine. Ultimate dreamer."
+      },
+      Pluto: {
+        Aries: "Transformative self-empowerment and rebirth. You experience power struggles in identity. Revolutionary.",
+        Taurus: "Transformation of values and resources. You undergo deep changes in what matters. Possessive.",
+        Gemini: "Transformation of communication and thought. You experience mental rebirths. Secrets revealed.",
+        Cancer: "Transformation of home and emotional foundations. You experience family metamorphosis. Roots change.",
+        Leo: "Transformation of creativity and self-expression. You experience dramatic rebirths. Power plays in love.",
+        Virgo: "Transformation of service and health. You experience healing crises. Obsessive perfection.",
+        Libra: "Transformation through partnerships. You experience relationship metamorphosis. Power dynamics.",
+        Scorpio: "Deepest transformation and rebirth. You experience complete metamorphosis. Ultimate power.",
+        Sagittarius: "Transformation of beliefs and expansion. You experience philosophical rebirth. Truth revelations.",
+        Capricorn: "Transformation of structures and authority. You experience institutional change. Power climbs.",
+        Aquarius: "Transformation of society and humanity. You experience collective shifts. Revolutionary.",
+        Pisces: "Spiritual transformation and dissolution. You experience transcendence. Spiritual rebirth."
+      }
+    };
+
+    // Angle meanings for hover
+    const angleMeanings = {
+      Ascendant: "The Rising Sign—how you present yourself to the world. Your social mask and first impression. Represents the 'I am' beginning of life.",
+      Midheaven: "The MC—your public status, career, and reputation. What you aspire to achieve. Represents your outer achievement and direction.",
+      Descendant: "The DSC—partnerships and what you seek in others. The 'not me' that complements you. Relationships are key to growth.",
+      "Imum Coeli": "The IC—your inner foundation, home, and psychological roots. Your private self and family legacy. Emotional foundation."
+    };
+
+    // House meanings for hover
+    const houseMeanings = {
+      1: "The House of Self—your identity, appearance, and how you begin things. Physical body and personality.",
+      2: "The House of Values—possessions, finances, self-worth, and what you value. Material security.",
+      3: "The House of Communication—daily routines, siblings, neighbors, and learning. Mental activity.",
+      4: "The House of Home—family, roots, childhood, and emotional foundation. Your private life.",
+      5: "The House of Pleasure—creativity, romance, children, and joy. Self-expression and fun.",
+      6: "The House of Service—work, health, pets, and daily responsibilities. Service and duty.",
+      7: "The House of Partnerships—marriage, business, contracts, and open enemies. One-on-one relationships.",
+      8: "The House of Transformation—death, rebirth, shared resources, and intimacy. Deep change.",
+      9: "The House of Philosophy—travel, higher education, religion, and wisdom. Expansion of mind.",
+      10: "The House of Career—public status, reputation, and achievement. Career and ambition.",
+      11: "The House of Friendships—hopes, wishes, groups, and social causes. Community and aspirations.",
+      12: "The House of Secrets—hidden enemies, isolation, spirituality, and subconscious. Endings and transcendence."
+    };
+
+    // Element meanings - personalized for your natal chart
+    const elementMeanings = {
+      fire: {
+        meaning: "Fire is your spark of inspiration and will. It represents your drive, creativity, and how you take action. In your chart, Fire indicates where you act with passion and enthusiasm.",
+        strength: "Your Fire energy fuels your ambitions and gives you the courage to pursue your goals. It's your vital life force."
+      },
+      earth: {
+        meaning: "Earth is your foundation and practical nature. It represents stability, material concerns, and how you build lasting structures.",
+        strength: "Your Earth energy gives you patience, persistence, and a grounded approach to life's challenges. You build with care."
+      },
+      air: {
+        meaning: "Air is your intellect and social nature. It represents communication, ideas, and how you connect with others mentally.",
+        strength: "Your Air energy grants you perspective, objectivity, and the ability to see situations from multiple angles."
+      },
+      water: {
+        meaning: "Water is your emotional depth and intuition. It represents feelings, connections, and how you experience the world on a gut level.",
+        strength: "Your Water energy gives you empathy, creativity, and the ability to feel deeply. You're guided by your heart."
+      }
+    };
+
+    // Track which planets are in which element for personalized tooltips
+    function getPlanetsByElement(positions) {
+      const signElements = {
+        Aries: 'fire', Taurus: 'earth', Gemini: 'air', Cancer: 'water',
+        Leo: 'fire', Virgo: 'earth', Libra: 'air', Scorpio: 'water',
+        Sagittarius: 'fire', Capricorn: 'earth', Aquarius: 'air', Pisces: 'water'
+      };
+      const byElement = { fire: [], earth: [], air: [], water: [] };
+      positions.forEach(p => {
+        const el = signElements[p.sign];
+        if (el) byElement[el].push(p.name);
+      });
+      return byElement;
+    }
+
+    // Default natal chart fallback data (used when server unavailable)
+    // These are actual positions from Astrovisor API including declination
+    const natalPlanets = [
+      { name: 'Sun', glyph: '☉', color: '#f3c14f', radius: 1.35, longitude: 148.28, sign: 'Leo', degree: 28.28, size: 0.18, retrograde: false, declination: 1.0115 },
+      { name: 'Moon', glyph: '☽', color: '#dbe4ff', radius: 0.9, longitude: 289.06, sign: 'Capricorn', degree: 19.06, size: 0.12, retrograde: false, declination: 0.0027 },
+      { name: 'Mercury', glyph: '☿', color: '#cbb28b', radius: 1.8, longitude: 148.31, sign: 'Leo', degree: 28.31, size: 0.08, retrograde: true, declination: 0.6187 },
+      { name: 'Venus', glyph: '♀', color: '#d8c0ff', radius: 2.2, longitude: 149.86, sign: 'Leo', degree: 29.86, size: 0.09, retrograde: true, declination: 0.2877 },
+      { name: 'Mars', glyph: '♂', color: '#d75b52', radius: 2.7, longitude: 173.33, sign: 'Virgo', degree: 23.33, size: 0.1, retrograde: false, declination: 2.4989 },
+      { name: 'Jupiter', glyph: '♃', color: '#d9b28d', radius: 3.5, longitude: 145.37, sign: 'Leo', degree: 25.37, size: 0.14, retrograde: false, declination: 6.3645 },
+      { name: 'Saturn', glyph: '♄', color: '#d9c58c', radius: 4.2, longitude: 301.69, sign: 'Aquarius', degree: 1.69, size: 0.13, retrograde: true, declination: 9.0434 },
+      { name: 'Uranus', glyph: '♅', color: '#8ad1d3', radius: 4.9, longitude: 280.17, sign: 'Capricorn', degree: 10.17, size: 0.12, retrograde: true, declination: 18.7963 },
+      { name: 'Neptune', glyph: '♆', color: '#7fa5ff', radius: 5.6, longitude: 284.31, sign: 'Capricorn', degree: 14.31, size: 0.12, retrograde: true, declination: 29.4614 },
+      { name: 'Pluto', glyph: '♇', color: '#b58ad5', radius: 6.25, longitude: 227.73, sign: 'Scorpio', degree: 17.73, size: 0.11, retrograde: false, declination: 29.8405 },
+    ];
+
+    // Add North Node and Chiron for depth
+    const minorBodies = [
+      { name: 'North Node', glyph: '☊', color: '#88aaff', radius: 7.0, longitude: 288.49, sign: 'Capricorn', degree: 18.49, size: 0.07, retrograde: true, declination: 0.0027 },
+      { name: 'Chiron', glyph: '⚷', color: '#cc88ff', radius: 7.5, longitude: 123.57, sign: 'Leo', degree: 3.57, size: 0.06, retrograde: false, declination: 11.1051 },
+    ];
+
+    // Natal Angles (from chart calculation)
+    const natalAngles = [
+      { name: 'Ascendant', glyph: 'ASC', color: '#ff6b6b', longitude: 260.63, sign: 'Sagittarius', degree: 20.63 },
+      { name: 'Midheaven', glyph: 'MC', color: '#ffd93d', longitude: 192.99, sign: 'Libra', degree: 12.99 },
+      { name: 'Descendant', glyph: 'DSC', color: '#6bcb77', longitude: 80.63, sign: 'Gemini', degree: 20.63 },
+      { name: 'Imum Coeli', glyph: 'IC', color: '#4d96ff', longitude: 12.99, sign: 'Aries', degree: 12.99 },
+    ];
+
+    // Houses (house cusps)
+    const houseCusps = [
+      { house: 1, longitude: 260.63, sign: 'Sagittarius' },
+      { house: 2, longitude: 296.85, sign: 'Capricorn' },
+      { house: 3, longitude: 337.68, sign: 'Pisces' },
+      { house: 4, longitude: 12.99, sign: 'Aries' },
+      { house: 5, longitude: 39.86, sign: 'Taurus' },
+      { house: 6, longitude: 61.28, sign: 'Gemini' },
+      { house: 7, longitude: 80.63, sign: 'Gemini' },
+      { house: 8, longitude: 116.85, sign: 'Cancer' },
+      { house: 9, longitude: 157.68, sign: 'Virgo' },
+      { house: 10, longitude: 192.99, sign: 'Libra' },
+      { house: 11, longitude: 219.86, sign: 'Scorpio' },
+      { house: 12, longitude: 241.28, sign: 'Sagittarius' },
+    ];
+
+    // Use natal data by default (include minor bodies for element counts)
+    const planets = natalPlanets.concat(minorBodies);
+
+    // === SCENE CREATION (moved up) ===
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x0a0e1a, 0.02);
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
+    camera.position.set(0, 6.5, 10);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.getElementById('scene').appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.minDistance = 6;
+    controls.maxDistance = 18;
+    controls.target.set(0, 0, 0);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.68);
+    scene.add(ambient);
+    const pointLight = new THREE.PointLight(0xf6d37d, 1.25, 40);
+    pointLight.position.set(0, 0, 0);
+    scene.add(pointLight);
+
+    const starGeometry = new THREE.BufferGeometry();
+    const starCount = 1600;
+    const positions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 120;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 120;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 120;
+    }
+    starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const starMaterial = new THREE.PointsMaterial({ color: 0xf0e6d3, size: 0.08, transparent: true, opacity: 0.72 });
+    scene.add(new THREE.Points(starGeometry, starMaterial));
+
+    const zodiacGroup = new THREE.Group();
+    scene.add(zodiacGroup);
+
+    // Add natal angle markers to scene
+    const angleGroup = new THREE.Group();
+    angleGroup.visible = false; // Start hidden, toggle with button
+    scene.add(angleGroup);
+
+    natalAngles.forEach((angle) => {
+      const angleRad = THREE.MathUtils.degToRad(angle.longitude); // No offset - aligns with zodiac
+      const radius = 5.8;
+      
+      // Angle marker line
+      const markerGeom = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(Math.cos(angleRad) * radius, 0, Math.sin(angleRad) * radius)
+      ]);
+      const markerMat = new THREE.LineBasicMaterial({ color: angle.color, transparent: true, opacity: 0.7 });
+      const marker = new THREE.Line(markerGeom, markerMat);
+      marker.userData.angle = angle;
+      angleGroup.add(marker);
+
+      // Angle label (with angle data for hover)
+      const label = createTextSprite(`${angle.glyph} ${angle.sign} ${angle.degree.toFixed(0)}°`);
+      label.position.set(Math.cos(angleRad) * 6.5, 0.2, Math.sin(angleRad) * 6.5);
+      label.material.rotation = angleRad + Math.PI / 2;
+      label.userData.angle = angle; // Add for hover detection
+      angleGroup.add(label);
+    });
+
+    // Add house cusps as subtle ring markers
+    houseCusps.forEach((house, idx) => {
+      const cuspRad = THREE.MathUtils.degToRad(house.longitude); // No offset - aligns with zodiac
+      const radius = 5.2;
+      const cuspMarker = new THREE.Mesh(
+        new THREE.SphereGeometry(0.05, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0x556677, transparent: true, opacity: 0.5 })
+      );
+      cuspMarker.position.set(Math.cos(cuspRad) * radius, 0, Math.sin(cuspRad) * radius);
+      cuspMarker.userData.house = house;
+      angleGroup.add(cuspMarker);
+    });
+
+    // === END SCENE CREATION ===
+
+    function makeArc(radius, startAngle, endAngle, color) {
+      const points = [];
+      for (let i = 0; i <= 48; i++) {
+        const t = startAngle + (endAngle - startAngle) * (i / 48);
+        points.push(new THREE.Vector3(Math.cos(t) * radius, 0, Math.sin(t) * radius));
+      }
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 });
+      return new THREE.Line(geometry, material);
+    }
+
+    function createTextSprite(message, color = '#f0e6d3') {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 256;
+      canvas.height = 128;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = color;
+      ctx.font = '44px DM Sans';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(message, canvas.width / 2, canvas.height / 2);
+      const texture = new THREE.CanvasTexture(canvas);
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(1.2, 0.6, 1);
+      return sprite;
+    }
+
+    const zodiacRadius = 7.05;
+    zodiac.forEach((sign, index) => {
+      const start = (index / 12) * Math.PI * 2;
+      const end = ((index + 1) / 12) * Math.PI * 2;
+      const arc = makeArc(zodiacRadius, start, end, elementColors[sign.element]);
+      zodiacGroup.add(arc);
+
+      const innerArc = makeArc(6.55, start, end, elementColors[sign.element]);
+      zodiacGroup.add(innerArc);
+
+      const angle = start + (end - start) / 2;
+      const label = createTextSprite(`${sign.glyph} ${sign.name}`);
+      label.position.set(Math.cos(angle) * 7.75, 0, Math.sin(angle) * 7.75);
+      zodiacGroup.add(label);
+    });
+
+    planets.forEach((planet) => {
+      const ring = makeArc(planet.radius, 0, Math.PI * 2, 0x303d55);
+      ring.material.opacity = 0.45;
+      scene.add(ring);
+    });
+
+    const sunCore = new THREE.Mesh(
+      new THREE.SphereGeometry(0.35, 32, 32),
+      new THREE.MeshBasicMaterial({ color: 0xffdd44 })
+    );
+    sunCore.position.set(0, 0, 0); // Ensure centered
+    scene.add(sunCore);
+    
+    // Add a point light at the sun
+    const sunLight = new THREE.PointLight(0xffdd44, 1.5, 20);
+    sunLight.position.set(0, 0, 0);
+    scene.add(sunLight);
+
+    const planetGroup = new THREE.Group();
+    scene.add(planetGroup);
+    const planetMeshes = [];
+    planets.forEach((planet) => {
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(planet.size, 22, 22),
+        new THREE.MeshStandardMaterial({ color: planet.color, metalness: 0.18, roughness: 0.35, emissive: planet.color, emissiveIntensity: 0.18 })
+      );
+      mesh.userData.planet = planet;
+      planetGroup.add(mesh);
+      planetMeshes.push(mesh);
+    });
+
+    // Add ecliptic plane (the plane of Earth's orbit)
+    const eclipticGroup = new THREE.Group();
+    scene.add(eclipticGroup);
+
+    // Ecliptic ring (the main zodiac plane)
+    const eclipticRing = new THREE.Mesh(
+      new THREE.RingGeometry(7.8, 7.85, 64),
+      new THREE.MeshBasicMaterial({ color: 0x334455, side: THREE.DoubleSide, transparent: true, opacity: 0.3 })
+    );
+    eclipticRing.rotation.x = Math.PI / 2;
+    eclipticGroup.add(eclipticRing);
+
+    // Celestial equator (tilted 23.5° relative to ecliptic)
+    const earthTilt = 23.5 * Math.PI / 180;
+    const equatorRing = new THREE.Mesh(
+      new THREE.RingGeometry(7.7, 7.75, 64),
+      new THREE.MeshBasicMaterial({ color: 0x445566, side: THREE.DoubleSide, transparent: true, opacity: 0.2 })
+    );
+    equatorRing.rotation.x = Math.PI / 2 - earthTilt; // Tilt relative to ecliptic
+    equatorRing.rotation.z = Math.PI / 6; // Offset to Aries
+    eclipticGroup.add(equatorRing);
+
+    // Add degree markers along ecliptic
+    for (let i = 0; i < 360; i += 30) {
+      const markerAngle = i * Math.PI / 180;
+      const marker = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.02, 0.3),
+        new THREE.MeshBasicMaterial({ color: 0x556677, transparent: true, opacity: 0.4 })
+      );
+      marker.position.set(Math.cos(markerAngle) * 7.82, 0, Math.sin(markerAngle) * 7.82);
+      marker.rotation.y = -markerAngle;
+      eclipticGroup.add(marker);
+    }
+
+    // Precession cone visualization (axial precession - 26,000 year cycle)
+    // This shows how Earth's axis wobbles
+    const precessionGroup = new THREE.Group();
+    scene.add(precessionGroup);
+    // Precession cone (axial precession - 26,000 year cycle) - subtle
+    const coneGeom = new THREE.ConeGeometry(8.5, 3, 32, 1, true);
+    const coneMat = new THREE.MeshBasicMaterial({ 
+      color: 0x223344, 
+      transparent: true, 
+      opacity: 0.03,
+      wireframe: true,
+      side: THREE.DoubleSide
+    });
+    const precessionCone = new THREE.Mesh(coneGeom, coneMat);
+    precessionCone.position.y = 1.5;
+    precessionCone.rotation.x = Math.PI + earthTilt; // Tilted axis
+    precessionGroup.add(precessionCone);
+
+    // Axis line (Earth's current axis) - subtle
+    const axisLineGeom = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, -8, 0),
+      new THREE.Vector3(0, 8, 0)
+    ]);
+    const axisLine = new THREE.Line(
+      axisLineGeom,
+      new THREE.LineBasicMaterial({ color: 0x664444, transparent: true, opacity: 0.2 })
+    );
+    axisLine.rotation.z = earthTilt; // Current axial tilt
+    precessionGroup.add(axisLine);
+
+    const tooltip = document.getElementById('tooltip');
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    const datetimeInput = document.getElementById('datetimeInput');
+    const positionsEl = document.getElementById('positions');
+    const anglesEl = document.getElementById('angles');
+    const elementsContent = document.getElementById('elementsContent');
+    const readingBody = document.getElementById('readingBody');
+    const statusLeft = document.getElementById('statusLeft');
+    const statusRight = document.getElementById('statusRight');
+    const rightPanel = document.getElementById('rightPanel');
+    const drawerToggle = document.getElementById('drawerToggle');
+
+    let animationHandle = null;
+    let currentDate = new Date(); // Track current date for tooltips
+    let currentEvents = [];
+
+    function julianDay(dateObj) {
+      return dateObj.getTime() / 86400000 + 2440587.5;
+    }
+
+    function daysSinceJ2000(dateObj) {
+      return julianDay(dateObj) - 2451545.0;
+    }
+
+    function normalizeAngle(deg) {
+      return ((deg % 360) + 360) % 360;
+    }
+
+    function zodiacInfo(longitude) {
+      const norm = normalizeAngle(longitude);
+      const signIndex = Math.floor(norm / 30);
+      const degree = norm % 30;
+      const sign = zodiac[signIndex];
+      return { ...sign, degree: degree.toFixed(1) };
+    }
+
+    function approximateLongitude(planet, dateObj) {
+      // If planet has natal longitude, use it as base position
+      if (planet.longitude !== undefined) {
+        // Add small movement based on time elapsed since birth for visual effect
+        // but keep very close to natal position
+        const d = daysSinceJ2000(dateObj);
+        const daysSinceBirth = d - daysSinceJ2000(new Date('1991-08-21T16:20:00'));
+        // Very slow drift - planets move slightly over decades
+        let drift = 0;
+        if (planet.name === 'Sun') drift = 0.9856 * daysSinceBirth;
+        else if (planet.name === 'Moon') drift = 13.1764 * daysSinceBirth;
+        else if (planet.name === 'Mercury') drift = (360 / 87.97) * daysSinceBirth;
+        else if (planet.name === 'Venus') drift = (360 / 224.7) * daysSinceBirth;
+        else if (planet.name === 'Mars') drift = (360 / 687) * daysSinceBirth;
+        else if (planet.name === 'Jupiter') drift = (360 / 4333) * daysSinceBirth;
+        else if (planet.name === 'Saturn') drift = (360 / 10759) * daysSinceBirth;
+        else if (planet.name === 'Uranus') drift = (360 / 30689) * daysSinceBirth;
+        else if (planet.name === 'Neptune') drift = (360 / 60182) * daysSinceBirth;
+        else if (planet.name === 'Pluto') drift = (360 / 90560) * daysSinceBirth;
+        
+        return normalizeAngle(planet.longitude + drift);
+      }
+      // Fallback to approximate calculation for other planets
+      const d = daysSinceJ2000(dateObj);
+      if (planet.name === 'Sun') return normalizeAngle(280.46 + 0.9856474 * d);
+      if (planet.name === 'Moon') return normalizeAngle(218.32 + 13.176396 * d);
+      return normalizeAngle(planet.lon0 + (360 / planet.period) * d);
+    }
+
+    function mercuryRetrograde(dateObj) {
+      const jd = julianDay(dateObj);
+      const cycle = 115.88;
+      const retroDuration = 22.0;
+      const anchor = 2460668.5; // rough anchor point for the illustrative cycle
+      const phase = ((jd - anchor) % cycle + cycle) % cycle;
+      return phase < retroDuration;
+    }
+
+    // Get all planets in retrograde (approximate transit calculations)
+    function getRetrogrades(dateObj) {
+      const jd = julianDay(dateObj);
+      const retroPlanets = [];
+      
+      // Planet orbital data: [cycle days, retrograde duration days, anchor JD]
+      const planetData = {
+        Mercury: [115.88, 22, 2460668.5],
+        Venus:   [584.0, 42, 2451532.5],
+        Mars:   [780.0, 72, 2451532.5],
+        Jupiter: [399.0, 122, 2451532.5],  // Synodic period approximation
+        Saturn:  [378.0, 136, 2451532.5],
+        Uranus:  [370.0, 126, 2451532.5],
+        Neptune: [367.0, 158, 2451532.5]
+      };
+      
+      for (const [planet, data] of Object.entries(planetData)) {
+        const [cycle, retroDur, anchor] = data;
+        const phase = ((jd - anchor) % cycle + cycle) % cycle;
+        if (phase < retroDur) {
+          retroPlanets.push(planet);
+        }
+      }
+      return retroPlanets;
+    }
+
+    function moonPhase(dateObj) {
+      const jd = julianDay(dateObj);
+      const synodic = 29.53058867;
+      const newMoonAnchor = 2451550.1;
+      const age = ((jd - newMoonAnchor) % synodic + synodic) % synodic;
+      const fraction = age / synodic;
+      const illumination = Math.round(((1 - Math.cos(fraction * Math.PI * 2)) / 2) * 100);
+      let name = 'Waxing Crescent';
+      if (age < 1.5) name = 'New Moon';
+      else if (age < 7.4) name = 'Waxing Crescent';
+      else if (age < 8.9) name = 'First Quarter';
+      else if (age < 14.2) name = 'Waxing Gibbous';
+      else if (age < 15.8) name = 'Full Moon';
+      else if (age < 22.1) name = 'Waning Gibbous';
+      else if (age < 23.6) name = 'Last Quarter';
+      else name = 'Waning Crescent';
+      return { name, illumination, glyph: name.includes('New') ? '🌑' : name.includes('First') ? '🌓' : name.includes('Full') ? '🌕' : name.includes('Last') ? '🌗' : name.includes('Waxing') ? '🌔' : '🌖' };
+    }
+
+    function sunSign(dateObj) {
+      return zodiacInfo(approximateLongitude(planets[0], dateObj)).name;
+    }
+
+    // Fetch real calendar events from Google Calendar
+    async function fetchCalendarEvents(startDate, endDate) {
+      try {
+        // Call the Google API through a local proxy
+        const response = await fetch(`/calendar-events?start=${startDate.toISOString()}&end=${endDate.toISOString()}`);
+        if (!response.ok) throw new Error('Failed to fetch calendar');
+        return await response.json();
+      } catch (e) {
+        console.log('Calendar fetch failed, using samples:', e);
+        return null;
+      }
+    }
+
+    function buildSampleEvents(dateObj) {
+      const base = new Date(dateObj);
+      base.setMinutes(0, 0, 0);
+      const make = (hour, title, note) => {
+        const dt = new Date(base);
+        dt.setHours(hour, 0, 0, 0);
+        return { title, datetime: dt, note };
+      };
+      return [
+        make(9, 'Inbox triage + responses', 'Good for communication clean-up and clear replies.'),
+        make(14, 'Partnership call', 'Best for diplomacy, alignment, and future framing.'),
+        make(19, 'Evening reflection', 'Best for closure, journaling, and softer emotional processing.'),
+      ];
+    }
+
+    // Get element energy summary
+    function getElementSummary(positions) {
+      const elements = { fire: 0, earth: 0, air: 0, water: 0 };
+      const signElements = {
+        Aries: 'fire', Taurus: 'earth', Gemini: 'air', Cancer: 'water',
+        Leo: 'fire', Virgo: 'earth', Libra: 'air', Scorpio: 'water',
+        Sagittarius: 'fire', Capricorn: 'earth', Aquarius: 'air', Pisces: 'water'
+      };
+      positions.forEach(p => {
+        const el = signElements[p.sign];
+        if (el) elements[el]++;
+      });
+      return elements;
+    }
+
+    // Get planetary ruler of a sign
+    function getSignRuler(sign) {
+      const rulers = {
+        Aries: 'Mars', Taurus: 'Venus', Gemini: 'Mercury', Cancer: 'Moon',
+        Leo: 'Sun', Virgo: 'Mercury', Libra: 'Venus', Scorpio: 'Pluto',
+        Sagittarius: 'Jupiter', Capricorn: 'Saturn', Aquarius: 'Uranus', Pisces: 'Neptune'
+      };
+      return rulers[sign] || '';
+    }
+
+    // Analyze major aspects
+    function analyzeAspects(positions) {
+      const aspects = [];
+      const majorPlanets = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'];
+      
+      for (let i = 0; i < positions.length; i++) {
+        for (let j = i + 1; j < positions.length; j++) {
+          const p1 = positions[i];
+          const p2 = positions[j];
+          if (!majorPlanets.includes(p1.name) || !majorPlanets.includes(p2.name)) continue;
+          
+          let diff = Math.abs(p1.longitude - p2.longitude);
+          if (diff > 180) diff = 360 - diff;
+          
+          let aspect = null;
+          if (diff < 8) aspect = 'conjunction';
+          else if (Math.abs(diff - 90) < 8) aspect = 'square';
+          else if (Math.abs(diff - 120) < 8) aspect = 'trine';
+          else if (Math.abs(diff - 180) < 8) aspect = 'opposition';
+          
+          if (aspect) {
+            aspects.push({ p1: p1.name, p2: p2.name, aspect });
+          }
+        }
+      }
+      return aspects;
+    }
+
+    // Determine favorable activities based on current chart
+    function getTimingGuidance(positions, aspects, phase, dateObj) {
+      const guidance = { favor: [], avoid: [], overall: '' };
+      
+      // Check Moon phase
+      if (phase.name.includes('New')) {
+        guidance.favor.push('New beginnings, launches, setting intentions');
+      } else if (phase.name.includes('Full')) {
+        guidance.favor.push('Culmination, completion, celebrations');
+      } else if (phase.name.includes('Waxing')) {
+        guidance.favor.push('Building, planting, taking action');
+      } else if (phase.name.includes('Waning')) {
+        guidance.favor.push('Reflection, release, wrapping up');
+      }
+      
+      // Mercury retrograde guidance - handled in readingForMoment instead
+      
+      // Check Mars energy
+      const mars = positions.find(p => p.name === 'Mars');
+      if (mars) {
+        if (mars.sign === 'Aries' || mars.sign === 'Scorpio' || mars.sign === 'Capricorn') {
+          guidance.favor.push('Bold action, competitive endeavors');
+        }
+      }
+      
+      // Check Venus
+      const venus = positions.find(p => p.name === 'Venus');
+      if (venus) {
+        if (['Taurus', 'Libra', 'Pisces'].includes(venus.sign)) {
+          guidance.favor.push('Creative work, relationships, self-care');
+        }
+      }
+      
+      // Check Jupiter
+      const jupiter = positions.find(p => p.name === 'Jupiter');
+      if (jupiter) {
+        guidance.favor.push('Expansion, learning, teaching, publishing');
+      }
+      
+      // Check Saturn
+      const saturn = positions.find(p => p.name === 'Saturn');
+      if (saturn) {
+        guidance.favor.push('Discipline, structure, long-term planning');
+      }
+      
+      // Check Sun
+      const sun = positions.find(p => p.name === 'Sun');
+      if (sun) {
+        if (['Leo', 'Aries', 'Sagittarius'].includes(sun.sign)) {
+          guidance.favor.push('Self-expression, leadership, visibility');
+        }
+      }
+      
+      // Generate overall summary
+      const elements = getElementSummary(positions);
+      const dominant = Object.entries(elements).sort((a, b) => b[1] - a[1])[0];
+      const retrogrades = getRetrogrades(dateObj);
+      
+      guidance.overall = `Today carries ${dominant[0]} energy (${dominant[1]} planets). ${retrogrades.length > 0 ? `${retrogrades.join(', ')} retrograde. ` : ''}${aspects.length} major aspect${aspects.length !== 1 ? 's' : ''} shape the day.`;
+      
+      return guidance;
+    }
+
+    function readingForMoment(dateObj, positions) {
+      const moon = positions.find((item) => item.name === 'Moon');
+      const phase = moonPhase(dateObj);
+      const retrogrades = getRetrogrades(dateObj);
+      const aspects = analyzeAspects(positions);
+      const guidance = getTimingGuidance(positions, aspects, phase, dateObj);
+      
+      // Add Mercury retrograde guidance to favor/avoid
+      if (retrogrades.includes('Mercury')) {
+        guidance.avoid.push('Signing contracts, important communications');
+        guidance.favor.push('Review, edit, plan, introspect');
+      } else {
+        guidance.favor.push('Messaging, negotiations, clear communication');
+      }
+      
+      // Build comprehensive reading
+      let body = '';
+      
+      // Retrogrades section - now using accurate transit calculations!
+      if (retrogrades.length > 0) {
+        body += `<p><strong>🔄 Retrogrades:</strong> ${retrogrades.join(', ')}. `;
+        if (retrogrades.includes('Mercury')) {
+          body += 'This favors revision over new commitments, double-check details in communications. ';
+        }
+        if (retrogrades.includes('Mars')) {
+          body += 'Energy is internalized—great for planning but avoid aggression. ';
+        }
+        if (retrogrades.includes('Venus')) {
+          body += 'Reevaluate relationships and values—don\'t make major romantic decisions. ';
+        }
+        if (retrogrades.includes('Jupiter')) {
+          body += 'Expand inward—great for philosophy but postpone travel planning. ';
+        }
+        if (retrogrades.includes('Saturn')) {
+          body += 'Structures need review—delays are likely, use time for groundwork. ';
+        }
+        body += '</p>';
+      }
+      
+      // Aspects section
+      if (aspects.length > 0) {
+        body += '<p><strong>🔗 Key Aspects:</strong> ';
+        const aspectDescriptions = aspects.map(a => {
+          if (a.aspect === 'conjunction') return `${a.p1}☌${a.p2} (blending)`;
+          if (a.aspect === 'square') return `${a.p1}□${a.p2} (tension)`;
+          if (a.aspect === 'trine') return `${a.p1}△${a.p2} (flow)`;
+          if (a.aspect === 'opposition') return `${a.p1}☾${a.p2} (balance)`;
+          return '';
+        }).join(', ');
+        body += aspectDescriptions + '. ';
+        
+        // Highlight key patterns
+        const trines = aspects.filter(a => a.aspect === 'trine');
+        const squares = aspects.filter(a => a.aspect === 'square');
+        if (trines.length > 0) body += 'Harmonious flows support ease today. ';
+        if (squares.length > 0) body += 'Watch for tension—adjust expectations. ';
+        body += '</p>';
+      }
+      
+      // Favorables section
+      if (guidance.favor.length > 0) {
+        body += `<p><strong>✅ Favored:</strong> ${guidance.favor.slice(0, 4).join(' · ')}</p>`;
+      }
+      
+      // Avoid section
+      if (guidance.avoid.length > 0) {
+        body += `<p><strong>⚠️ Avoid:</strong> ${guidance.avoid.slice(0, 3).join(' · ')}</p>`;
+      }
+      
+      // Overall
+      body += `<p><strong>📊 Overall:</strong> ${guidance.overall}</p>`;
+      
+      // Generate 2-4 sentence summary
+      const summary = generateSummary(dateObj, positions, phase, aspects);
+      
+      // Format date for display
+      const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      
+      return {
+        headline: `☉ ${sunSign(dateObj)} · ☽ ${moon.sign} · ${phase.glyph} ${phase.name}`,
+        date: dateStr,
+        summary: summary,
+        body: body,
+        retrogrades,
+        phase,
+      };
+    }
+
+    // Generate 2-4 sentence day summary
+    function generateSummary(dateObj, positions, phase, aspects) {
+      const moon = positions.find(p => p.name === 'Moon');
+      const sun = positions.find(p => p.name === 'Sun');
+      const mercury = positions.find(p => p.name === 'Mercury');
+      const sentences = [];
+      const retrogrades = getRetrogrades(dateObj);
+      
+      // Moon in sign intro
+      sentences.push(`The ${moon.sign} Moon drives our emotional undercurrent today, ${getMoonSignTheme(moon.sign)}.`);
+      
+      // Phase context
+      if (phase.name.includes('New')) {
+        sentences.push(`With the New Moon, this is a potent time for fresh starts and setting intentions.`);
+      } else if (phase.name.includes('Full')) {
+        sentences.push(`The Full Moon illuminates what needs attention—culmination and revelation are at peak.`);
+      } else if (phase.name.includes('Waxing')) {
+        sentences.push(`Waxing energy supports building momentum and taking action on plans.`);
+      } else {
+        sentences.push(`The Waning Moon encourages reflection on what's been accomplished and what to release.`);
+      }
+      
+      // Key energy
+      const elements = getElementSummary(positions);
+      const dominant = Object.entries(elements).sort((a, b) => b[1] - a[1])[0];
+      sentences.push(`The dominant ${dominant[0]} energy (${dominant[1]} planets) shapes the day's theme, ${getElementTheme(dominant[0])}.`);
+      
+      // Retrograde note
+      if (retrogrades.length > 0) {
+        const rxList = retrogrades.join(', ');
+        sentences.push(`With ${retrogrades.length} planet${retrogrades.length > 1 ? 's' : ''} retrograde (${rxList}), caution in ${retrogrades.includes('Mercury') ? 'communications and contracts' : 'big decisions'} is advised.`);
+      }
+      
+      return sentences.slice(0, 4).join(' ');
+    }
+
+    function getMoonSignTheme(sign) {
+      const themes = {
+        Aries: 'quick to react and seek independence',
+        Taurus: 'seeking stability and comfort through sensory experiences',
+        Gemini: 'stirring curiosity and a need for mental stimulation',
+        Cancer: 'drawing us inward toward home and emotional nesting',
+        Leo: 'calling for self-expression and recognition',
+        Virgo: 'focusing on health, work, and practical details',
+        Libra: 'balancing relationships and seeking harmony',
+        Scorpio: 'intensifying emotions and probing for depth',
+        Sagittarius: 'expanding through adventure and big-picture thinking',
+        Capricorn: 'driving toward goals and responsibilities',
+        Aquarius: 'stirring innovation and social connection',
+        Pisces: 'heightening intuition and spiritual sensitivity'
+      };
+      return themes[sign] || 'influencing our feelings';
+    }
+
+    function getElementTheme(element) {
+      const themes = {
+        fire: 'inspiring action and confidence',
+        earth: 'grounding us in practical matters',
+        air: 'activating mental activity and communication',
+        water: 'deepening emotional and intuitive channels'
+      };
+      return themes[element] || 'shaping the day\'s energy';
+    }
+
+    function formatPositionCard(position) {
+      const rx = position.retrograde ? ' (Rx)' : '';
+      const dec = position.declination !== undefined ? ` · δ${position.declination >= 0 ? '+' : ''}${position.declination.toFixed(1)}°` : '';
+      return `
+        <div class="card">
+          <strong>${position.glyph} ${position.name}${rx}</strong>
+          <small>${position.sign} ${position.degree}°${dec} · ${position.element}</small>
+        </div>
+      `;
+    }
+
+    function formatEventCard(event, annotation) {
+      return `
+        <div class="card event" data-iso="${event.datetime.toISOString()}">
+          <strong>${event.title}</strong>
+          <small>${event.datetime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · ${annotation}</small>
+        </div>
+      `;
+    }
+
+    function updateFromDate(dateObj) {
+      currentDate = dateObj; // Store globally for tooltip access
+      const planetPositions = [];
+      planets.forEach((planet, index) => {
+        const longitude = approximateLongitude(planet, dateObj);
+        const angle = THREE.MathUtils.degToRad(longitude); // Align with zodiac starting at right
+        const mesh = planetMeshes[index];
+        
+        // Simple flat positioning (like original) - will add 3D later
+        const r = planet.radius;
+        mesh.position.set(
+          Math.cos(angle) * r, 
+          0.15 + Math.sin(index * 0.5) * 0.3, // Slight vertical stagger for visibility
+          Math.sin(angle) * r
+        );
+        
+        mesh.userData.longitude = longitude;
+        
+        // Get declination for display
+        let declination = planet.declination || 0;
+        if (declination === 0 && planet.sign) {
+          const signDeclinations = {
+            'Aries': 0, 'Taurus': 0, 'Gemini': 0, 'Cancer': 12, 
+            'Leo': 20, 'Virgo': 12, 'Libra': 0, 'Scorpio': 0,
+            'Sagittarius': -12, 'Capricorn': -20, 'Aquarius': -15, 'Pisces': -6
+          };
+          declination = signDeclinations[planet.sign] || 0;
+        }
+        mesh.userData.declination = declination;
+        
+        const signInfo = zodiacInfo(longitude);
+        mesh.userData.signInfo = signInfo;
+        // Determine if retrograde - check natal data or use approximate function
+        const isRetrograde = planet.retrograde !== undefined ? planet.retrograde : mercuryRetrograde(dateObj);
+        const planetDeclination = mesh.userData.declination;
+        planetPositions.push({
+          name: planet.name,
+          glyph: planet.glyph,
+          longitude,
+          sign: signInfo.name,
+          degree: signInfo.degree,
+          element: signInfo.element,
+          color: planet.color,
+          retrograde: isRetrograde,
+          declination: planetDeclination,
+        });
+      });
+
+      positionsEl.innerHTML = planetPositions.map(formatPositionCard).join('');
+
+      // Display natal elements with counts and tooltips
+      const planetsByElement = getPlanetsByElement(planetPositions);
+      const elements = getElementSummary(planetPositions);
+      const elementOrder = ['fire', 'earth', 'air', 'water'];
+      const elementLabels = { fire: 'Fire', earth: 'Earth', air: 'Air', water: 'Water' };
+      
+      elementsContent.innerHTML = `
+        <div class="legend">
+          ${elementOrder.map(el => {
+            const count = elements[el];
+            const planets = planetsByElement[el];
+            const meaning = elementMeanings[el];
+            return `
+              <span class="element-pill ${el}">
+                ${elementLabels[el]}<span class="count">${count}</span>
+                <div class="element-tooltip">
+                  <strong>${elementLabels[el]} — ${count} planet${count !== 1 ? 's' : ''}</strong>
+                  ${meaning.meaning}
+                  <div class="planets">Planets: ${planets.join(', ') || 'None'}</div>
+                </div>
+              </span>
+            `;
+          }).join('')}
+        </div>
+      `;
+
+      // Display natal angles with explanations
+      const angleCards = natalAngles.map(angle => {
+        const meaning = angleMeanings[angle.name] || '';
+        return `
+          <div class="card angle-card" style="position: relative;">
+            <strong style="color: ${angle.color}">${angle.glyph} ${angle.name}</strong>
+            <small>${angle.sign} ${angle.degree.toFixed(1)}°</small>
+            <div class="angle-tooltip">${meaning}</div>
+          </div>
+        `;
+      }).join('');
+
+      // Display houses (simple list without tooltips since meanings are complex)
+      const houseCards = houseCusps.map(house => `
+        <div class="card" style="opacity: 0.65; font-size: 0.85rem;">
+          <strong style="color: #88aaff">House ${house.house}</strong>
+          <small>${house.sign}</small>
+        </div>
+      `).join('');
+      anglesEl.innerHTML = angleCards + '<div style="margin: 12px 0; opacity: 0.5; text-align: center;">— Houses —</div>' + houseCards;
+
+      // Display Minor Aspects (from cache)
+      const minorAspectsEl = document.getElementById('minorAspects');
+      const minorAspectDefinitions = {
+        'quintile': 'Quintile (72°) — Creative talent and power',
+        'biquintile': 'Biquintile (144°) — Double creative power',
+        'septile': 'Septile (51.43°) — Spiritual inspiration',
+        'novile': 'Novile (40°) — Transcendence, spiritual completion',
+        'semisextile': 'Semisextile (30°) — Subtle connection',
+        'semisquare': 'Semisquare (45°) — Internal tension',
+        'sesquiquadrate': 'Sesquiquadrate (135°) — External tension',
+        'quincunx': 'Quincunx (150°) — Adjustment needed',
+        'decile': 'Decile (36°) — Growth through small steps',
+        'tredecile': 'Tredecile (108°) — Creative intelligence',
+        'vigintile': 'Vigintile (18°) — Refined talent'
+      };
+      
+      let minorHtml = '<div style="font-size: 0.8rem; opacity: 0.8;">';
+      for (const [type, def] of Object.entries(minorAspectDefinitions)) {
+        minorHtml += `<div style="padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">${def}</div>`;
+      }
+      minorHtml += '</div>';
+      minorAspectsEl.innerHTML = minorHtml;
+
+      // Update planet info panel with meanings
+      updatePlanetInfo();
+
+      const reading = readingForMoment(dateObj, planetPositions);
+      const illum = reading.phase.illumination ? `${reading.phase.illumination}%` : '';
+      readingBody.innerHTML = `
+        <div style="margin-bottom: 8px; color: var(--muted); font-size: 0.85rem;">${reading.date}</div>
+        <div class="card">
+          <strong>${reading.headline}${illum ? ' · ' + illum + ' illum' : ''}</strong>
+        </div>
+        <div class="card" style="margin-top: 12px; background: rgba(201,168,76,0.08); border-left: 3px solid var(--gold);">
+          <p style="margin: 0; line-height: 1.5; font-size: 0.95rem;">${reading.summary}</p>
+        </div>
+        <div class="card" style="margin-top: 12px;">
+          ${reading.body}
+        </div>
+        <div class="card" style="margin-top: 12px; opacity: 0.7;">
+          <strong>Oracle Note</strong>
+          <small>This star map reads the illustrative planetary cycle. For full life guidance inside Hermes, let Oracle pull Astrovisor data, your calendar, and consent-aware context together.</small>
+        </div>
+      `;
+
+      statusLeft.textContent = `☽ ${planetPositions[1].sign} Moon · ${reading.phase.illumination}%`;
+      const retrogrades = getRetrogrades(dateObj);
+      statusRight.textContent = retrogrades.length > 0 
+        ? `🔄 ${retrogrades.join(', ')} Retrograde` 
+        : 'All Planets Direct';
+      statusCenter.textContent = `${planetPositions[1].sign} Moon · click an event to pivot the wheel`;
+
+      const url = new URL(window.location.href);
+      url.searchParams.set('dt', dateObj.toISOString());
+      history.replaceState({}, '', url.toString());
+    }
+
+    function toInputValue(dateObj) {
+      const local = new Date(dateObj.getTime() - dateObj.getTimezoneOffset() * 60000);
+      return local.toISOString().slice(0, 16);
+    }
+
+    function fromInputValue(value) {
+      return value ? new Date(value) : new Date();
+    }
+
+    document.getElementById('nowButton').addEventListener('click', () => {
+      const now = new Date();
+      datetimeInput.value = toInputValue(now);
+      updateFromDate(now);
+    });
+
+    document.getElementById('animateButton').addEventListener('click', () => {
+      if (animationHandle) {
+        clearInterval(animationHandle);
+        animationHandle = null;
+        document.getElementById('animateButton').textContent = 'Animate Day';
+        return;
+      }
+      let dt = fromInputValue(datetimeInput.value);
+      const start = new Date(dt);
+      start.setHours(0, 0, 0, 0);
+      dt = start;
+      let steps = 0;
+      document.getElementById('animateButton').textContent = 'Stop';
+      animationHandle = setInterval(() => {
+        const next = new Date(start.getTime() + steps * 15 * 60000);
+        datetimeInput.value = toInputValue(next);
+        updateFromDate(next);
+        steps += 1;
+        if (steps > 96) {
+          clearInterval(animationHandle);
+          animationHandle = null;
+          document.getElementById('animateButton').textContent = 'Animate Day';
+        }
+      }, 120);
+    });
+
+    document.getElementById('shareButton').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        statusCenter.textContent = 'Share link copied. You can bookmark or serve this file locally.';
+      } catch (error) {
+        statusCenter.textContent = 'Unable to copy automatically. Use the current file URL in your browser.';
+      }
+    });
+
+    // Mode state
+    let chartMode = 'natal'; // 'natal' or 'transit'
+    let anglesVisible = false; // Start with angles hidden
+
+    // Natal/Transit toggle
+    document.getElementById('natalButton').addEventListener('click', () => {
+      chartMode = 'natal';
+      document.getElementById('natalButton').classList.add('active');
+      document.getElementById('transitButton').classList.remove('active');
+      updateChartMode();
+    });
+
+    document.getElementById('transitButton').addEventListener('click', () => {
+      chartMode = 'transit';
+      document.getElementById('transitButton').classList.add('active');
+      document.getElementById('natalButton').classList.remove('active');
+      updateChartMode();
+    });
+
+    // Angles toggle
+    document.getElementById('anglesButton').addEventListener('click', () => {
+      anglesVisible = !anglesVisible;
+      angleGroup.visible = anglesVisible;
+      document.getElementById('anglesButton').classList.toggle('active', anglesVisible);
+      document.getElementById('anglesButton').textContent = anglesVisible ? 'Hide Natal Angles' : 'Show Natal Angles';
+    });
+
+    // Update chart based on mode
+    function updateChartMode() {
+      if (chartMode === 'natal') {
+        // Show natal chart date
+        const natalDate = new Date('1991-08-21T16:20:00');
+        datetimeInput.value = toInputValue(natalDate);
+        updateFromDate(natalDate);
+      } else {
+        // Show current transits
+        const now = new Date();
+        datetimeInput.value = toInputValue(now);
+        updateFromDate(now);
+      }
+    }
+
+    // Generic collapsible toggle for all sections
+    const collapsibleState = {
+      calendar: true,
+      planetInfo: true,
+      elements: true,
+      positions: true,
+      angles: true
+    };
+    
+    document.querySelectorAll('.collapsible-toggle').forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        const section = toggle.dataset.section;
+        collapsibleState[section] = !collapsibleState[section];
+        const content = toggle.parentElement.querySelector('.collapsible-content, .list');
+        const arrow = toggle.querySelector('.collapsible-arrow');
+        if (content) {
+          content.style.display = collapsibleState[section] ? 'block' : 'none';
+        }
+        if (arrow) {
+          arrow.textContent = collapsibleState[section] ? '▾' : '▸';
+        }
+      });
+    });
+
+    // Load calendar events into left panel
+    async function loadCalendarIntoPanel() {
+      const listEl = document.getElementById('calendarEventsList');
+      if (!listEl) return;
+      
+      try {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        const end = new Date();
+        end.setDate(end.getDate() + 14);
+        
+        const response = await fetch(`http://127.0.0.1:8081/calendar?start=${start.toISOString()}&end=${end.toISOString()}`);
+        let events = [];
+        
+        if (response.ok) {
+          events = await response.json();
+        }
+        
+        if (events && events.length > 0) {
+          events.sort((a, b) => new Date(a.start) - new Date(b.start));
+          
+          let html = '';
+          events.slice(0, 10).forEach(e => {
+            const eventDate = new Date(e.start);
+            const dateStr = eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            const timeStr = eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            const moonSign = zodiacInfo(approximateLongitude(planets[1], eventDate)).name;
+            
+            html += `<div class="calendar-event-row" data-event='${JSON.stringify(e)}' style="padding: 8px; background: rgba(255,255,255,0.03); border-radius: 6px; cursor: pointer; border: 1px solid transparent; transition: all 150ms ease;">
+              <div style="font-size: 0.85rem; font-weight: 500;">${e.title || 'Untitled'}</div>
+              <div class="muted" style="font-size: 0.7rem;">${dateStr} · ${timeStr} · ☽ ${moonSign}</div>
+            </div>`;
+          });
+          html += events.length > 10 ? `<div class="muted" style="text-align:center;padding:8px;font-size:0.75rem;">+${events.length - 10} more in bottom panel</div>` : '';
+          listEl.innerHTML = html;
+          
+          // Add click handlers
+          listEl.querySelectorAll('.calendar-event-row').forEach(row => {
+            row.addEventListener('click', () => {
+              const e = JSON.parse(row.dataset.event.replace(/&quot;/g, '"'));
+              const eventDate = new Date(e.start);
+              datetimeInput.value = toInputValue(eventDate);
+              updateFromDate(eventDate);
+            });
+            row.addEventListener('mouseenter', () => {
+              row.style.borderColor = 'var(--gold)';
+              row.style.background = 'rgba(201,168,76,0.1)';
+            });
+            row.addEventListener('mouseleave', () => {
+              row.style.borderColor = 'transparent';
+              row.style.background = 'rgba(255,255,255,0.03)';
+            });
+          });
+        } else {
+          listEl.innerHTML = '<p class="muted" style="text-align:center;padding:10px;font-size:0.8rem;">No upcoming events</p>';
+        }
+      } catch (e) {
+        listEl.innerHTML = '<p class="muted" style="text-align:center;padding:10px;font-size:0.8rem;">Calendar unavailable</p>';
+      }
+    }
+
+    // Update planet info panel with meanings
+    function updatePlanetInfo() {
+      const planetInfoEl = document.getElementById('planetInfoContent');
+      if (!planetInfoEl) return;
+      
+      let html = '';
+      planets.forEach((planet) => {
+        const meaning = planetMeanings[planet.name]?.[planet.sign] || 'No meaning available.';
+        html += `<div class="planet-card" style="margin-bottom: 12px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span style="color: ${planet.color}; font-size: 1.1rem;">${planet.glyph}</span>
+            <strong>${planet.name}</strong>
+            <span class="muted">in ${planet.sign}</span>
+            ${planet.retrograde ? '<span style="color: #d35a4b; font-size: 0.75rem;">(R)</span>' : ''}
+          </div>
+          <p class="tiny" style="margin: 0; line-height: 1.4;">${meaning}</p>
+        </div>`;
+      });
+      planetInfoEl.innerHTML = html;
+    }
+
+    // Update angle explanations in tooltip
+    function getAngleExplanation(angleName) {
+      return angleMeanings[angleName] || '';
+    }
+
+    // Google Calendar Modal
+    const calendarModal = document.createElement('div');
+    calendarModal.id = 'calendarEventsModal';
+    calendarModal.className = 'modal';
+    calendarModal.style.display = 'none';
+    calendarModal.innerHTML = `
+      <div class="modal-backdrop"></div>
+      <div class="modal-content" style="max-width: 560px;">
+        <div class="modal-header">
+          <h3>📅 Your Calendar</h3>
+          <button id="closeCalendarModal" class="action" style="padding: 4px 10px;">✕</button>
+        </div>
+        <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+          <div id="calendarEventsList" style="display: grid; gap: 8px;"></div>
+        </div>
+      </div>
+    </div>`;
+    document.getElementById('app').appendChild(calendarModal);
+
+    // Event Analysis Modal
+    const analysisModal = document.createElement('div');
+    analysisModal.id = 'analysisModal';
+    analysisModal.className = 'modal';
+    analysisModal.style.display = 'none';
+    analysisModal.innerHTML = `
+      <div class="modal-backdrop"></div>
+      <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+          <h3>🔮 Event Analysis</h3>
+          <button id="closeAnalysisModal" class="action" style="padding: 4px 10px;">✕</button>
+        </div>
+        <div class="modal-body">
+          <div id="analysisContent" style="line-height: 1.6;"></div>
+          <div id="analysisLoading" style="display:none; text-align: center; padding: 20px;">
+            <span class="muted">Analyzing with Oracle...</span>
+          </div>
+          <div id="analysisActions" style="margin-top: 16px; display: grid; gap: 8px;">
+            <button id="askOracleBtn" class="action" style="width: 100%;">Ask Oracle for Advice</button>
+            <button id="copyAnalysisBtn" class="action" style="width: 100%; background: rgba(255,255,255,0.05);">Copy Analysis</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+    document.getElementById('app').appendChild(analysisModal);
+
+    // Store current event for analysis
+    let currentEventForAnalysis = null;
+
+    // Note: Calendar is loaded in left panel via loadCalendarIntoPanel()
+    // The bottom calendar panel functionality continues below...
+
+    // Calendar Panel Toggle
+    let calendarPanelOpen = false;
+    document.getElementById('calendarToggle').addEventListener('click', () => {
+      calendarPanelOpen = !calendarPanelOpen;
+      const panel = document.getElementById('calendarPanel');
+      panel.style.display = calendarPanelOpen ? 'block' : 'none';
+      
+      if (calendarPanelOpen) {
+        loadCalendarPanel();
+      }
+    });
+
+    document.getElementById('minimizeCalendar').addEventListener('click', () => {
+      calendarPanelOpen = false;
+      document.getElementById('calendarPanel').style.display = 'none';
+    });
+
+    // Load calendar into bottom panel
+    async function loadCalendarPanel() {
+      const content = document.getElementById('calendarPanelContent');
+      content.innerHTML = '<p class="muted" style="text-align: center; padding: 20px;">Loading...</p>';
+      
+      try {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        const end = new Date();
+        end.setDate(end.getDate() + 14);
+        
+        const response = await fetch(`http://127.0.0.1:8081/calendar?start=${start.toISOString()}&end=${end.toISOString()}`);
+        let events = [];
+        
+        if (response.ok) {
+          events = await response.json();
+        }
+        
+        if (events && events.length > 0) {
+          events.sort((a, b) => new Date(a.start) - new Date(b.start));
+          
+          let html = '<div style="display: grid; gap: 6px;">';
+          window.calendarEvents = events;
+          
+          events.forEach((e, idx) => {
+            const eventDate = new Date(e.start);
+            const dateStr = eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            const timeStr = eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            const moonSign = zodiacInfo(approximateLongitude(planets[1], eventDate)).name;
+            
+            html += `<div class="calendar-event-row" data-index="${idx}" style="padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border: 1px solid transparent; transition: all 150ms ease;">
+              <div>
+                <div style="font-weight: 500;">${e.title || 'Untitled'}</div>
+                <div class="muted" style="font-size: 0.75rem;">${dateStr} · ${timeStr} · ☽ ${moonSign}</div>
+              </div>
+            </div>`;
+          });
+          html += '</div>';
+          content.innerHTML = html;
+          
+          // Add click handlers - transit to that time
+          document.querySelectorAll('.calendar-event-row').forEach(row => {
+            row.addEventListener('click', () => {
+              const idx = parseInt(row.dataset.index);
+              const e = window.calendarEvents[idx];
+              const eventDate = new Date(e.start);
+              datetimeInput.value = toInputValue(eventDate);
+              updateFromDate(eventDate);
+              calendarPanelOpen = false;
+              document.getElementById('calendarPanel').style.display = 'none';
+            });
+            row.addEventListener('mouseenter', () => {
+              row.style.borderColor = 'var(--gold)';
+              row.style.background = 'rgba(201,168,76,0.1)';
+            });
+            row.addEventListener('mouseleave', () => {
+              row.style.borderColor = 'transparent';
+              row.style.background = 'rgba(255,255,255,0.03)';
+            });
+          });
+        } else {
+          content.innerHTML = '<p class="muted" style="text-align: center; padding: 20px;">No upcoming events. Click 📅+ to add an astrology reading!</p>';
+        }
+      } catch (e) {
+        content.innerHTML = '<p class="muted" style="text-align: center; padding: 20px;">Unable to load calendar.</p>';
+      }
+    }
+
+    // Legacy - still referenced by some code
+    let currentAnalysisText = '';
+
+    function getMoonActivity(sign) {
+      const activities = {
+        Aries: 'quick decisions and competitive activities',
+        Taurus: 'practical tasks and sensory pleasures',
+        Gemini: 'communication and social gatherings',
+        Cancer: 'home matters and emotional connections',
+        Leo: 'creative expression and self-care',
+        Virgo: 'organization and health routines',
+        Libra: 'relationships and diplomatic matters',
+        Scorpio: 'intense deep work and transformation',
+        Sagittarius: 'learning and exploration',
+        Capricorn: 'work and goal-oriented tasks',
+        Aquarius: 'innovation and social causes',
+        Pisces: 'spiritual practices and creative flow'
+      };
+      return activities[sign] || 'general activities';
+    }
+
+    // Close analysis modal
+    document.getElementById('closeAnalysisModal')?.addEventListener('click', () => {
+      document.getElementById('analysisModal').style.display = 'none';
+    });
+    analysisModal.querySelector('.modal-backdrop')?.addEventListener('click', () => {
+      document.getElementById('analysisModal').style.display = 'none';
+    });
+
+    // Ask Oracle button - copies prompt for Oracle
+    document.getElementById('askOracleBtn')?.addEventListener('click', () => {
+      if (!currentEventForAnalysis) return;
+      
+      const eventDate = new Date(currentEventForAnalysis.start);
+      const prompt = `Oracle, analyze this calendar event:
+
+**Event:** ${currentEventForAnalysis.title || 'Untitled'}
+**Date:** ${eventDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at ${eventDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+
+Please analyze the astrological timing, suggest the best way to navigate this event, and recommend any optimal times or alternative dates if the timing isn't ideal.`;
+      
+      navigator.clipboard.writeText(prompt).then(() => {
+        const btn = document.getElementById('askOracleBtn');
+        btn.textContent = '✓ Copied! Ask Oracle';
+        btn.style.background = 'rgba(107, 143, 97, 0.3)';
+        setTimeout(() => {
+          btn.textContent = 'Ask Oracle for Advice';
+          btn.style.background = '';
+        }, 2000);
+      });
+    });
+
+    // Copy analysis button
+    document.getElementById('copyAnalysisBtn')?.addEventListener('click', async () => {
+      if (currentAnalysisText) {
+        await navigator.clipboard.writeText(currentAnalysisText);
+        const btn = document.getElementById('copyAnalysisBtn');
+        btn.textContent = '✓ Copied!';
+        btn.style.background = 'rgba(107, 143, 97, 0.3)';
+        setTimeout(() => {
+          btn.textContent = 'Copy Analysis';
+          btn.style.background = 'rgba(255,255,255,0.05)';
+        }, 2000);
+      }
+    });
+
+    // Calendar Panel Toggle
+    calendarPanelOpen = false;
+    document.getElementById('calendarToggle').addEventListener('click', () => {
+      calendarPanelOpen = !calendarPanelOpen;
+      const panel = document.getElementById('calendarPanel');
+      panel.style.display = calendarPanelOpen ? 'block' : 'none';
+      
+      if (calendarPanelOpen) {
+        loadCalendarPanel();
+      }
+    });
+
+    document.getElementById('minimizeCalendar').addEventListener('click', () => {
+      calendarPanelOpen = false;
+      document.getElementById('calendarPanel').style.display = 'none';
+    });
+
+    // Load calendar into bottom panel
+    async function loadCalendarPanel() {
+      const content = document.getElementById('calendarPanelContent');
+      content.innerHTML = '<p class="muted" style="text-align: center; padding: 20px;">Loading...</p>';
+      
+      try {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        const end = new Date();
+        end.setDate(end.getDate() + 14);
+        
+        const response = await fetch(`http://127.0.0.1:8081/calendar?start=${start.toISOString()}&end=${end.toISOString()}`);
+        let events = [];
+        
+        if (response.ok) {
+          events = await response.json();
+        }
+        
+        if (events && events.length > 0) {
+          events.sort((a, b) => new Date(a.start) - new Date(b.start));
+          
+          let html = '<div style="display: grid; gap: 6px;">';
+          // Store events globally for click handler
+          window.calendarEvents = events;
+          
+          events.forEach((e, idx) => {
+            const eventDate = new Date(e.start);
+            const dateStr = eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            const timeStr = eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            const moonSign = zodiacInfo(approximateLongitude(planets[1], eventDate)).name;
+            
+            html += `<div class="calendar-event-row" data-index="${idx}" style="padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border: 1px solid transparent; transition: all 150ms ease;">
+              <div>
+                <div style="font-weight: 500;">${e.title || 'Untitled'}</div>
+                <div class="muted" style="font-size: 0.75rem;">${dateStr} · ${timeStr} · ☽ ${moonSign}</div>
+              </div>
+            </div>`;
+          });
+          html += '</div>';
+          content.innerHTML = html;
+          
+          // Add click handlers - transit to that time
+          document.querySelectorAll('.calendar-event-row').forEach(row => {
+            row.addEventListener('click', () => {
+              const idx = parseInt(row.dataset.index);
+              const e = window.calendarEvents[idx];
+              const eventDate = new Date(e.start);
+              datetimeInput.value = toInputValue(eventDate);
+              updateFromDate(eventDate);
+              calendarPanelOpen = false;
+              document.getElementById('calendarPanel').style.display = 'none';
+            });
+            row.addEventListener('mouseenter', () => {
+              row.style.borderColor = 'var(--gold)';
+              row.style.background = 'rgba(201,168,76,0.1)';
+            });
+            row.addEventListener('mouseleave', () => {
+              row.style.borderColor = 'transparent';
+              row.style.background = 'rgba(255,255,255,0.03)';
+            });
+          });
+        } else {
+          content.innerHTML = '<p class="muted" style="text-align: center; padding: 20px;">No upcoming events. Click 📅+ to add an astrology reading!</p>';
+        }
+      } catch (e) {
+        content.innerHTML = '<p class="muted" style="text-align: center; padding: 20px;">Unable to load calendar.</p>';
+      }
+    }
+
+    // Legacy calendar fetch (for left panel)
+
+    // Modal elements
+    const modal = document.getElementById('calendarModal');
+    const modalTitle = document.getElementById('eventTitle');
+    const modalDateTime = document.getElementById('eventDateTime');
+    const modalDescription = document.getElementById('eventDescription');
+    
+    // Open modal and populate with reading data
+    document.getElementById('addToCalendar').addEventListener('click', () => {
+      const reading = readingForMoment(currentDate, 
+        planets.map(p => ({
+          name: p.name,
+          longitude: approximateLongitude(p, currentDate),
+          sign: p.sign,
+          degree: p.degree,
+          retrograde: p.retrograde
+        }))
+      );
+      
+      // Create event data
+      const dateStr = currentDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      const title = `🌟 Astrology: ${dateStr} - ${reading.headline}`;
+      
+      // Build description
+      const description = `${reading.summary}
+
+🔄 Retrogrades: ${reading.body.match(/🔄 Retrogrades:([^<]+)/)?.[1]?.replace(/<[^>]+>/g, '').trim() || 'None'}
+🔗 Aspects: ${reading.body.match(/🔗 Key Aspects:([^<]+)/)?.[1]?.replace(/<[^>]+>/g, '').trim() || 'None'}
+✅ Favored: ${reading.body.match(/✅ Favored:([^<]+)/)?.[1]?.replace(/<[^>]+>/g, '').trim() || 'None'}
+⚠️ Avoid: ${reading.body.match(/⚠️ Avoid:([^<]+)/)?.[1]?.replace(/<[^>]+>/g, '').trim() || 'None'}
+
+📊 Overall: ${reading.body.match(/📊 Overall:([^<]+)/)?.[1]?.replace(/<[^>]+>/g, '').trim() || ''}
+
+— Generated by Oracle Star Map`;
+
+      // Populate modal
+      modalTitle.value = title;
+      modalDateTime.value = toInputValue(currentDate);
+      modalDescription.value = description;
+      
+      modal.style.display = 'flex';
+    });
+
+    // Close modal
+    document.getElementById('closeModal').addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+    document.querySelector('.modal-backdrop').addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+
+    // Save to Google Calendar via Hermes MCP
+    document.getElementById('saveToGoogle').addEventListener('click', async () => {
+      const btn = document.getElementById('saveToGoogle');
+      btn.textContent = 'Saving...';
+      btn.disabled = true;
+      
+      const eventData = {
+        summary: modalTitle.value,
+        description: modalDescription.value,
+        start: { dateTime: new Date(modalDateTime.value).toISOString() },
+        end: { dateTime: new Date(new Date(modalDateTime.value).getTime() + 60*60*1000).toISOString() }
+      };
+      
+      try {
+        // Try Hermes MCP gateway first
+        const response = await fetch('http://127.0.0.1:8081/calendar/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventData)
+        });
+        
+        if (response.ok) {
+          btn.textContent = '✓ Saved!';
+          btn.style.background = 'rgba(107, 143, 97, 0.3)';
+          setTimeout(() => {
+            modal.style.display = 'none';
+            btn.textContent = 'Save to Google Calendar';
+            btn.style.background = '';
+            btn.disabled = false;
+          }, 1500);
+        } else {
+          throw new Error('MCP failed');
+        }
+      } catch (e) {
+        console.log('MCP not available, trying direct Google Calendar API...');
+        // Try Google Calendar API directly (requires OAuth)
+        // For now, copy to clipboard as fallback
+        try {
+          const gcalLink = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(eventData.summary)}&dates=${new Date(modalDateTime.value).toISOString().replace(/[-:]/g, '').split('.')[0]}Z/${new Date(new Date(modalDateTime.value).getTime() + 60*60*1000).toISOString().replace(/[-:]/g, '').split('.')[0]}Z&details=${encodeURIComponent(eventData.description)}`;
+          window.open(gcalLink, '_blank');
+          btn.textContent = '✓ Opened Google Calendar';
+          setTimeout(() => {
+            modal.style.display = 'none';
+            btn.textContent = 'Save to Google Calendar';
+            btn.disabled = false;
+          }, 2000);
+        } catch (e2) {
+          btn.textContent = 'Error';
+          btn.disabled = false;
+        }
+      }
+    });
+
+    // Copy to clipboard
+    document.getElementById('copyEvent').addEventListener('click', async () => {
+      const text = `${modalTitle.value}\n\n${modalDescription.value}`;
+      try {
+        await navigator.clipboard.writeText(text);
+        const btn = document.getElementById('copyEvent');
+        btn.textContent = '✓ Copied!';
+        btn.style.background = 'rgba(107, 143, 97, 0.3)';
+        setTimeout(() => {
+          btn.textContent = 'Copy to Clipboard';
+          btn.style.background = 'rgba(255,255,255,0.05)';
+        }, 2000);
+      } catch (e) {
+        console.error('Copy failed:', e);
+      }
+    });
+
+    drawerToggle.addEventListener('click', () => {
+      rightPanel.classList.toggle('open');
+      drawerToggle.textContent = rightPanel.classList.contains('open') ? '❮' : '❯';
+    });
+
+    datetimeInput.addEventListener('change', () => updateFromDate(fromInputValue(datetimeInput.value)));
+
+    renderer.domElement.addEventListener('pointermove', (event) => {
+      pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(planetMeshes);
+      if (!hits.length) {
+        // Also check for angle markers
+        const angleHits = raycaster.intersectObjects(angleGroup.children);
+        if (angleHits.length && anglesVisible) {
+          const angle = angleHits[0].object.userData.angle;
+          if (angle) {
+            tooltip.style.display = 'block';
+            tooltip.style.left = `${event.clientX + 14}px`;
+            tooltip.style.top = `${event.clientY + 14}px`;
+            const explanation = getAngleExplanation(angle.name);
+            tooltip.innerHTML = `<strong>${angle.glyph} ${angle.name}</strong><br><span class="muted">${angle.sign} ${angle.degree.toFixed(1)}°</span><br><p class="tiny" style="margin: 6px 0 0; max-width: 220px;">${explanation}</p>`;
+            return;
+          }
+        }
+        tooltip.style.display = 'none';
+        return;
+      }
+      const hit = hits[0].object;
+      const info = hit.userData.signInfo;
+      const planet = hit.userData.planet;
+      const meaning = planetMeanings[planet.name]?.[info.name] || '';
+      const retroText = planet.retrograde ? '<span style="color:#d35a4b">Retrograde</span>' : 'Direct';
+      
+      // Find any conjunctions with other planets (within 8 degrees)
+      const aspects = [];
+      planets.forEach((p, idx) => {
+        if (p.name === planet.name) return;
+        const pLong = hit.userData.longitude;
+        const otherLong = approximateLongitude(p, currentDate);
+        let diff = Math.abs(pLong - otherLong);
+        if (diff > 180) diff = 360 - diff;
+        if (diff < 8) {
+          aspects.push(`${p.name} (${p.sign})`);
+        }
+      });
+      const aspectsText = aspects.length > 0 ? `<br><span style="color:#8467d7">Conjunctions: ${aspects.join(', ')}</span>` : '';
+      
+      tooltip.style.display = 'block';
+      tooltip.style.left = `${event.clientX + 14}px`;
+      tooltip.style.top = `${event.clientY + 14}px`;
+      tooltip.innerHTML = `<strong>${planet.name} in ${info.name}</strong><br><span class="muted">${retroText}</span>${aspectsText}${meaning ? `<p class="tiny" style="margin: 6px 0 0; max-width: 220px;">${meaning}</p>` : ''}`;
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    const initial = new URL(window.location.href).searchParams.get('dt');
+    // Default natal chart (used when server unavailable)
+    const natalDate = new Date('1991-08-21T16:20:00');
+    const startDate = initial ? new Date(initial) : natalDate;
+    datetimeInput.value = toInputValue(startDate);
+    updateFromDate(startDate);
+
+    // Load calendar into left panel
+    loadCalendarIntoPanel();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      // zodiacGroup.rotation.y += 0.0008; // Disabled spinning
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>

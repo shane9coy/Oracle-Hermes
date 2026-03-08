@@ -1,0 +1,33 @@
+# Oracle user profile template
+{
+  "schema_version": "1.0.0",
+  "preferred_name": "YOUR_NAME",
+  "timezone": "America/New_York",
+  "house_system": "P",
+  "birth_chart": {
+    "date": "1990-01-01",
+    "time": "12:00",
+    "time_known": true,
+    "location": "Your City, Your State, USA",
+    "latitude": 40.7128,
+    "longitude": -74.006,
+    "timezone": "America/New_York"
+  },
+  "guidance_preferences": {
+    "tone": "warm, mystical, grounded",
+    "directness": "medium",
+    "ritual_language": true,
+    "default_view": "brief"
+  },
+  "life_domains": {
+    "communication": 0.8,
+    "relationships": 0.9,
+    "finance": 0.7,
+    "creativity": 0.8,
+    "rest": 0.5,
+    "decisive_action": 0.8,
+    "launches": 0.9,
+    "health": 0.7,
+    "spiritual": 0.6
+  }
+}
