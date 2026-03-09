@@ -1,0 +1,32 @@
+# Oracle Optional Hermes Config
+#
+# This file is a mergeable snippet for ~/.hermes/config.yaml.
+#
+# Important:
+# - Oracle v1 talks to Astrovisor.io through direct REST calls in oracle_astrology.py.
+# - Do NOT register https://astrovisor.io itself as an MCP server unless you build
+#   a dedicated MCP wrapper that speaks the MCP protocol.
+# - The only active MCP integration below is natal-mcp as an optional local
+#   fallback / companion tool for offline or Swiss Ephemeris workflows.
+#
+# After merging this block into ~/.hermes/config.yaml, restart Hermes.
+
+mcp_servers:
+  natal:
+    command: "uvx"
+    args: ["natal-mcp"]
+    env:
+      NATAL_MCP_HOME: "~/natal_mcp"
+    timeout: 120
+    connect_timeout: 60
+
+# Future option if you later build a local Astrovisor MCP bridge:
+#
+# mcp_servers:
+#   astrovisor_bridge:
+#     command: "python3"
+#     args: ["/absolute/path/to/astrovisor_mcp_server.py"]
+#     env:
+#       ASTROVISOR_TOKEN: "${ASTROVISOR_TOKEN}"
+#     timeout: 120
+#     connect_timeout: 60

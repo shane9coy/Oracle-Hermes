@@ -1,0 +1,26 @@
+# Oracle Consent Configuration
+# Controls what Oracle can access and do.
+# Change these and Oracle respects them immediately.
+
+consent_version: 1
+
+# Google Workspace access
+gmail_read: true
+gmail_send: false
+calendar_read: true
+calendar_write: false
+
+# Data storage
+store_cached_summaries: true
+journal_reflections: true
+
+# External actions
+requires_confirmation_for_external_actions: true
+
+# Astrovisor API feature access
+astrovisor_natal: true
+astrovisor_transits: true
+astrovisor_tarot: true
+astrovisor_numerology: true
+astrovisor_chakra: true
+astrovisor_financial: true

@@ -1,0 +1,62 @@
+# Oracle Scoring Weights
+# Used by oracle_scoring.py to rank timing windows.
+# Keys here should align with user_profile.json life_domains.
+
+communication:
+  mercury_weight: 0.5
+  moon_weight: 0.2
+  jupiter_weight: 0.2
+  saturn_penalty: 0.1
+  mercury_rx_penalty: 0.8
+  void_of_course_penalty: 0.6
+
+relationships:
+  venus_weight: 0.5
+  moon_weight: 0.3
+  mars_penalty: 0.2
+  neptune_boost: 0.1
+
+finance:
+  venus_weight: 0.4
+  jupiter_weight: 0.4
+  saturn_weight: 0.2
+  mercury_rx_penalty: 0.5
+
+creativity:
+  venus_weight: 0.4
+  neptune_weight: 0.3
+  moon_weight: 0.2
+  jupiter_boost: 0.1
+
+rest:
+  moon_weight: 0.5
+  neptune_weight: 0.3
+  saturn_release: 0.2
+
+launches:
+  mercury_rx_penalty: 0.8
+  moon_phase_weight: 0.3
+  jupiter_weight: 0.3
+  eclipse_penalty: 0.5
+  mars_boost: 0.2
+
+decisive_action:
+  mars_weight: 0.4
+  sun_weight: 0.3
+  jupiter_weight: 0.2
+  saturn_weight: 0.1
+  mercury_rx_penalty: 0.3
+
+health:
+  sun_weight: 0.35
+  moon_weight: 0.25
+  saturn_weight: 0.15
+  mars_penalty: 0.1
+  rest_boost: 0.15
+
+spiritual:
+  neptune_weight: 0.35
+  moon_weight: 0.25
+  jupiter_weight: 0.2
+  saturn_weight: 0.1
+  eclipse_boost: 0.1
