@@ -51,9 +51,7 @@ echo "  Setting up config..."
 # .env
 if [ ! -f "$ORACLE_DIR/.env" ]; then
     cat > "$ORACLE_DIR/.env" << 'EOF'
-ASTROVISOR_TOKEN=pk-usr-YOUR_TOKEN
-ASTROVISOR_BASE_URL=https://astrovisor.io
-ASTROVISOR_TIMEOUT=60
+# Ephemeris API (ephemeris.fyi) - no authentication required
 EOF
 fi
 
@@ -64,8 +62,8 @@ consent_version: 2
 use_hermes_google_default: true
 gmail_read: true
 calendar_read: true
-astrovisor_natal: true
-astrovisor_transits: true
+ephemeris_data: true
+ephemeris_planetary: true
 EOF
 fi
 
@@ -79,4 +77,4 @@ fi
 echo "  ✓ Oracle installed!"
 echo ""
 echo "To use Oracle, type: /oracle"
-echo "Get a free API key at: https://astrovisor.io"
+echo "Ephemeris API (ephemeris.fyi) is used for planetary data - no API key needed!"

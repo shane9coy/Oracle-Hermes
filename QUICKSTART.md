@@ -19,12 +19,10 @@ cp -r oracle-astro/skills/oracle ~/.hermes/skills/
 
 # 2. Create config
 mkdir -p ~/.hermes/oracle
-echo "ASTROVISOR_TOKEN=your_token" > ~/.hermes/oracle/.env
+# Ephemeris API (ephemeris.fyi) requires no authentication
+touch ~/.hermes/oracle/.env
 
-# 3. Get your free API key
-# https://astrovisor.io
-
-# 4. Run Oracle
+# 3. Run Oracle
 /oracle
 ```
 
@@ -48,7 +46,7 @@ python server.py
 
 ## Get Help
 
-- Astrovisor API: https://astrovisor.io
+- Ephemeris API: https://ephemeris.fyi
 - Hermes Agent: https://github.com/nousresearch/hermes
 - This repo: https://github.com/YOUR_USERNAME/oracle-astro
 

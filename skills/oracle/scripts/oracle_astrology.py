@@ -9,58 +9,37 @@ from oracle_profile import load_profile, profile_meta, validate_profile
 from oracle_utils import (
     OracleHTTPError,
     get_cache_dir,
-    get_env,
     http_json_request,
     iso_now,
     load_cache,
     query_url,
     recursive_find_first,
     recursive_find_values,
-    resolve_token_alias,
     save_cache,
 )
 
-DEFAULT_BASE_URL = get_env("ASTROVISOR_BASE_URL", "https://astrovisor.io") or "https://astrovisor.io"
-DEFAULT_TIMEOUT = int(get_env("ASTROVISOR_TIMEOUT", "60") or 60)
-TRANSIT_ENDPOINT_CANDIDATES = [
-    "/api/transits/calculate",
-    "/api/natal/transits",
-]
+DEFAULT_BASE_URL = "https://ephemeris.fyi"
+DEFAULT_TIMEOUT = 60
 TTL_BY_KIND = {
-    "natal": None,
-    "transits": 3600,
-    "calendar_predictions": 21600,
-    "harmonics": 86400,
-    "minor_aspects": 86400,
-    "solar_return": 86400,
-    "lunation_overlay": 86400,
-    "planetary_returns": 86400,
-    "profections": 86400,
-    "numerology": 86400,
-    "chakra": 86400,
-    "financial_cycles": 21600,
-    "tarot_daily": 0,
-    "tarot_spread": 0,
-    "tarot_single": 0,
+    "ephemeris": 3600,
+    "moon_phase": 3600,
+    "planetary_positions": 3600,
+    "aspects": 3600,
+    "zodiac_sign": 3600,
+    "daily_events": 86400,
 }
 
 
-def _perform_http_request(url: str, *, method: str = "POST", headers: dict[str, str] | None = None, payload: Any = None) -> Any:
-    return http_json_request(url, method=method, headers=headers, payload=payload, timeout=DEFAULT_TIMEOUT)
-
-
-def _token() -> str | None:
-    return resolve_token_alias()
-
-
-def _headers() -> dict[str, str] | None:
-    token = _token()
-    if not token:
-        return None
-    return {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
+def _perform_http_request(
+    url: str,
+    *,
+    method: str = "GET",
+    headers: dict[str, str] | None = None,
+    payload: Any = None,
+) -> Any:
+    return http_json_request(
+        url, method=method, headers=headers, payload=payload, timeout=DEFAULT_TIMEOUT
+    )
 
 
 def _profile_id(profile: dict[str, Any] | None) -> str | None:
@@ -69,33 +48,47 @@ def _profile_id(profile: dict[str, Any] | None) -> str | None:
     return str(profile_meta(profile).get("profile_id") or "").strip() or None
 
 
-def build_birth_payload(profile: dict[str, Any], *, target_datetime: str | None = None, extras: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_location_query(
+    profile: dict[str, Any], when: str | None = None
+) -> dict[str, Any]:
     birth = profile.get("birth_chart", {})
-    birth_time = birth.get("time") or "12:00"
-    payload = {
-        "name": profile.get("preferred_name") or "Oracle User",
-        "datetime": target_datetime or f"{birth.get('date')}T{birth_time}:00",
-        "latitude": birth.get("latitude"),
-        "longitude": birth.get("longitude"),
-        "location": birth.get("location") or "Unknown",
-        "timezone": birth.get("timezone") or profile.get("timezone") or "UTC",
-        "full_name": profile.get("preferred_name") or "Oracle User",
-        "house_system": profile.get("house_system", "P"),
+    lat = birth.get("latitude")
+    lon = birth.get("longitude")
+    if lat is None or lon is None:
+        raise ValueError("Profile is missing birth_chart latitude/longitude")
+    query: dict[str, Any] = {
+        "latitude": lat,
+        "longitude": lon,
     }
-    if extras:
-        payload.update(extras)
-    return payload
+    if when:
+        query["datetime"] = when if isinstance(when, str) else when.isoformat()
+    return query
 
 
 def _extract_aspects(data: Any) -> list[str]:
-    raw = recursive_find_values(data, {"aspects", "major_aspects", "active_aspects"})
+    raw = recursive_find_values(
+        data, {"aspects", "major_aspects", "active_aspects", "aspect_list"}
+    )
     aspects: list[str] = []
     for value in raw:
         if isinstance(value, list):
             for item in value:
                 if isinstance(item, dict):
-                    parts = [str(item.get(key)) for key in ("planet_1", "aspect", "planet_2") if item.get(key)]
-                    aspects.append(" ".join(parts).strip() or json.dumps(item, sort_keys=True))
+                    parts = [
+                        str(item.get(key))
+                        for key in (
+                            "planet_1",
+                            "aspect",
+                            "planet_2",
+                            "body1",
+                            "body2",
+                            "name",
+                        )
+                        if item.get(key)
+                    ]
+                    aspects.append(
+                        " ".join(parts).strip() or json.dumps(item, sort_keys=True)
+                    )
                 else:
                     aspects.append(str(item))
         elif value:
@@ -108,7 +101,11 @@ def _extract_aspects(data: Any) -> list[str]:
 
 
 def _extract_planets(data: Any) -> list[dict[str, Any]]:
-    raw = recursive_find_first(data, {"planets", "planet_positions", "positions"}, default=[])
+    raw = recursive_find_first(
+        data,
+        {"bodies", "planets", "planet_positions", "positions", "body_positions"},
+        default=[],
+    )
     planets: list[dict[str, Any]] = []
     if isinstance(raw, dict):
         for name, value in raw.items():
@@ -126,20 +123,37 @@ def _extract_planets(data: Any) -> list[dict[str, Any]]:
 
 
 def _extract_moon_phase(data: Any) -> str | None:
-    value = recursive_find_first(data, {"moon_phase", "moonphase", "phase", "moon_phase_name"}, default=None)
+    value = recursive_find_first(
+        data,
+        {"moon_phase", "moonphase", "phase", "moon_phase_name", "phase_name", "name"},
+        default=None,
+    )
     return str(value) if value is not None else None
 
 
 def _extract_moon_sign(data: Any) -> str | None:
-    value = recursive_find_first(data, {"moon_sign", "moonsign"}, default=None)
+    value = recursive_find_first(
+        data, {"moon_sign", "moonsign", "sign", "zodiac_sign"}, default=None
+    )
     return str(value) if value is not None else None
 
 
 def _extract_mercury_retrograde(data: Any) -> bool | None:
-    explicit = recursive_find_first(data, {"mercury_retrograde", "mercury_rx"}, default=None)
+    explicit = recursive_find_first(
+        data,
+        {"mercury_retrograde", "mercury_rx", "is_retrograde", "retrograde"},
+        default=None,
+    )
     if explicit is not None:
         return bool(explicit)
-    haystacks = [json.dumps(item, sort_keys=True) if isinstance(item, (dict, list)) else str(item) for item in recursive_find_values(data, {"summary", "interpretation", "status", "description"})]
+    haystacks = [
+        json.dumps(item, sort_keys=True)
+        if isinstance(item, (dict, list))
+        else str(item)
+        for item in recursive_find_values(
+            data, {"summary", "interpretation", "status", "description"}
+        )
+    ]
     combined = " ".join(haystacks).lower()
     if "mercury retrograde" in combined:
         return True
@@ -159,11 +173,18 @@ def _derive_summary(kind: str, data: Any) -> dict[str, Any]:
     }
 
 
-def _error_wrapper(kind: str, endpoint: str, message: str, *, status: int | None = None, body: str | None = None) -> dict[str, Any]:
+def _error_wrapper(
+    kind: str,
+    endpoint: str,
+    message: str,
+    *,
+    status: int | None = None,
+    body: str | None = None,
+) -> dict[str, Any]:
     return {
         "ok": False,
         "kind": kind,
-        "source": "astrovisor",
+        "source": "ephemeris.fyi",
         "endpoint": endpoint,
         "requested_at": iso_now(),
         "cached": False,
@@ -177,11 +198,13 @@ def _error_wrapper(kind: str, endpoint: str, message: str, *, status: int | None
     }
 
 
-def _success_wrapper(kind: str, endpoint: str, data: Any, *, cached: bool, url: str) -> dict[str, Any]:
+def _success_wrapper(
+    kind: str, endpoint: str, data: Any, *, cached: bool, url: str
+) -> dict[str, Any]:
     return {
         "ok": True,
         "kind": kind,
-        "source": "astrovisor",
+        "source": "ephemeris.fyi",
         "endpoint": endpoint,
         "url": url,
         "requested_at": iso_now(),
@@ -196,16 +219,12 @@ def call_endpoint(
     kind: str,
     endpoint: str,
     payload: dict[str, Any] | None = None,
-    method: str = "POST",
+    method: str = "GET",
     ttl: int | None = None,
     query: dict[str, Any] | None = None,
     force: bool = False,
     profile_id: str | None = None,
 ) -> dict[str, Any]:
-    token = _token()
-    if not token:
-        return _error_wrapper(kind, endpoint, "ASTROVISOR_TOKEN / ASTROVISOR_API_KEY is not configured")
-
     base_url = DEFAULT_BASE_URL.rstrip("/")
     path = endpoint if endpoint.startswith("/") else f"/{endpoint}"
     url = base_url + path
@@ -224,9 +243,17 @@ def call_endpoint(
             return cached_payload
 
     try:
-        response_data = _perform_http_request(url, method=method, headers=_headers(), payload=payload)
+        response_data = _perform_http_request(
+            url, method=method, headers=None, payload=payload
+        )
     except OracleHTTPError as exc:
-        return _error_wrapper(kind, endpoint, f"Astrovisor request failed with HTTP {exc.status}", status=exc.status, body=exc.body)
+        return _error_wrapper(
+            kind,
+            endpoint,
+            f"Ephemeris request failed with HTTP {exc.status}",
+            status=exc.status,
+            body=exc.body,
+        )
     except Exception as exc:  # noqa: BLE001
         return _error_wrapper(kind, endpoint, str(exc))
 
@@ -236,133 +263,149 @@ def call_endpoint(
     return wrapped
 
 
+def get_current_sky(profile: dict[str, Any], when: str | None = None) -> dict[str, Any]:
+    query = build_location_query(profile, when)
+    return call_endpoint(
+        kind="ephemeris",
+        endpoint="/ephemeris/get_current_sky",
+        query=query,
+        profile_id=_profile_id(profile),
+    )
+
+
+def get_planetary_positions(
+    profile: dict[str, Any], when: str | None = None
+) -> dict[str, Any]:
+    query = build_location_query(profile, when)
+    return call_endpoint(
+        kind="planetary_positions",
+        endpoint="/ephemeris/get_planetary_positions",
+        query=query,
+        profile_id=_profile_id(profile),
+    )
+
+
+def get_luminaries(profile: dict[str, Any], when: str | None = None) -> dict[str, Any]:
+    query = build_location_query(profile, when)
+    return call_endpoint(
+        kind="ephemeris",
+        endpoint="/ephemeris/get_luminaries",
+        query=query,
+        profile_id=_profile_id(profile),
+    )
+
+
+def get_ephemeris_data(
+    profile: dict[str, Any], when: str | None = None, bodies: list[str] | None = None
+) -> dict[str, Any]:
+    query = build_location_query(profile, when)
+    if bodies:
+        query["bodies"] = ",".join(bodies) if isinstance(bodies, list) else bodies
+    return call_endpoint(
+        kind="ephemeris",
+        endpoint="/ephemeris/get_ephemeris_data",
+        query=query,
+        profile_id=_profile_id(profile),
+    )
+
+
+def get_moon_phase(when: str | None = None) -> dict[str, Any]:
+    query: dict[str, Any] = {}
+    if when:
+        query["datetime"] = when if isinstance(when, str) else when.isoformat()
+    return call_endpoint(
+        kind="moon_phase",
+        endpoint="/ephemeris/get_moon_phase",
+        query=query if query else None,
+    )
+
+
+def get_zodiac_sign(
+    profile: dict[str, Any], body: str, when: str | None = None
+) -> dict[str, Any]:
+    query = build_location_query(profile, when)
+    query["body"] = body
+    return call_endpoint(
+        kind="zodiac_sign",
+        endpoint="/ephemeris/get_zodiac_sign",
+        query=query,
+        profile_id=_profile_id(profile),
+    )
+
+
+def calculate_aspects(
+    profile: dict[str, Any],
+    when: str | None = None,
+    orb: float = 8.0,
+    bodies: list[str] | None = None,
+) -> dict[str, Any]:
+    query = build_location_query(profile, when)
+    query["orb"] = orb
+    if bodies:
+        query["bodies"] = ",".join(bodies) if isinstance(bodies, list) else bodies
+    return call_endpoint(
+        kind="aspects",
+        endpoint="/ephemeris/calculate_aspects",
+        query=query,
+        profile_id=_profile_id(profile),
+    )
+
+
+def get_daily_events(
+    profile: dict[str, Any], body: str, when: str | None = None
+) -> dict[str, Any]:
+    query = build_location_query(profile, when)
+    query["body"] = body
+    return call_endpoint(
+        kind="daily_events",
+        endpoint="/ephemeris/get_daily_events",
+        query=query,
+        profile_id=_profile_id(profile),
+    )
+
+
+def get_earth_position(when: str | None = None) -> dict[str, Any]:
+    query: dict[str, Any] = {}
+    if when:
+        query["datetime"] = when if isinstance(when, str) else when.isoformat()
+    return call_endpoint(
+        kind="ephemeris",
+        endpoint="/ephemeris/get_earth_position",
+        query=query if query else None,
+    )
+
+
+def compare_positions(
+    profile: dict[str, Any], date1: str, date2: str, bodies: list[str] | None = None
+) -> dict[str, Any]:
+    query = build_location_query(profile, None)
+    query["date1"] = date1
+    query["date2"] = date2
+    if bodies:
+        query["bodies"] = ",".join(bodies) if isinstance(bodies, list) else bodies
+    return call_endpoint(
+        kind="ephemeris",
+        endpoint="/ephemeris/compare_positions",
+        query=query,
+        profile_id=_profile_id(profile),
+    )
+
+
 def get_natal_chart(profile: dict[str, Any]) -> dict[str, Any]:
-    return call_endpoint(kind="natal", endpoint="/api/natal/chart", payload=build_birth_payload(profile), profile_id=_profile_id(profile))
+    birth = profile.get("birth_chart", {})
+    birth_time = birth.get("time") or "12:00"
+    natal_dt = f"{birth.get('date')}T{birth_time}:00"
+    return get_ephemeris_data(profile, when=natal_dt)
 
 
 def get_transits(profile: dict[str, Any], when: str | None = None) -> dict[str, Any]:
     target = when or date.today().isoformat()
-    payload = build_birth_payload(
-        profile,
-        extras={
-            "date": target,
-            "transit_date": target,
-        },
-    )
-    last_error: dict[str, Any] | None = None
-    for endpoint in TRANSIT_ENDPOINT_CANDIDATES:
-        response = call_endpoint(kind="transits", endpoint=endpoint, payload=payload, profile_id=_profile_id(profile))
-        if response.get("ok"):
-            return response
-        last_error = response
-        error_status = (response.get("error") or {}).get("status")
-        if error_status not in {404, 405}:
-            return response
-    return last_error or _error_wrapper("transits", TRANSIT_ENDPOINT_CANDIDATES[0], "No transit endpoint available")
-
-
-def get_calendar_predictions(profile: dict[str, Any], start: str, end: str) -> dict[str, Any]:
-    birth = profile.get("birth_chart", {})
-    payload = {
-        "start_date": start,
-        "end_date": end,
-        "name": profile.get("preferred_name") or "Oracle User",
-        "datetime": f"{birth.get('date')}T{(birth.get('time') or '12:00')}:00",
-        "birth_date": birth.get("date"),
-        "birth_time": birth.get("time") or "12:00",
-        "birth_place": birth.get("location"),
-        "birth_latitude": birth.get("latitude"),
-        "birth_longitude": birth.get("longitude"),
-        "birth_timezone": birth.get("timezone") or profile.get("timezone") or "UTC",
-        "latitude": birth.get("latitude"),
-        "longitude": birth.get("longitude"),
-        "location": birth.get("location"),
-        "timezone": birth.get("timezone") or profile.get("timezone") or "UTC",
-    }
-    return call_endpoint(kind="calendar_predictions", endpoint="/api/calendar/generate", payload=payload, profile_id=_profile_id(profile))
-
-
-def get_harmonics(profile: dict[str, Any]) -> dict[str, Any]:
-    return call_endpoint(kind="harmonics", endpoint="/api/harmonics/calculate", payload=build_birth_payload(profile), profile_id=_profile_id(profile))
-
-
-def get_minor_aspects(profile: dict[str, Any]) -> dict[str, Any]:
-    return call_endpoint(kind="minor_aspects", endpoint="/api/minor-aspects/calculate", payload=build_birth_payload(profile), profile_id=_profile_id(profile))
+    return get_ephemeris_data(profile, when=target)
 
 
 def get_solar_return(profile: dict[str, Any], year: int) -> dict[str, Any]:
-    return call_endpoint(
-        kind="solar_return",
-        endpoint="/api/solar/return",
-        payload=build_birth_payload(profile, extras={"return_year": year, "year": year, "compare_with_natal": True}),
-        profile_id=_profile_id(profile),
-    )
-
-
-def get_lunation_overlay(profile: dict[str, Any], year: int) -> dict[str, Any]:
-    return call_endpoint(
-        kind="lunation_overlay",
-        endpoint="/api/solar/lunations-overlay",
-        payload=build_birth_payload(profile),
-        query={"year": year},
-        profile_id=_profile_id(profile),
-    )
-
-
-def get_planetary_returns(profile: dict[str, Any], start: str, end: str) -> dict[str, Any]:
-    return call_endpoint(
-        kind="planetary_returns",
-        endpoint="/api/solar/all-planetary-returns",
-        payload=build_birth_payload(profile, extras={"start_date": start, "end_date": end}),
-        profile_id=_profile_id(profile),
-    )
-
-
-def get_profections(profile: dict[str, Any]) -> dict[str, Any]:
-    return call_endpoint(kind="profections", endpoint="/api/solar/profections", payload=build_birth_payload(profile), profile_id=_profile_id(profile))
-
-
-def get_numerology(profile: dict[str, Any]) -> dict[str, Any]:
-    birth = profile.get("birth_chart", {})
-    payload = build_birth_payload(profile, extras={"birth_date": birth.get("date")})
-    return call_endpoint(kind="numerology", endpoint="/api/numerology/calculate", payload=payload, profile_id=_profile_id(profile))
-
-
-def get_chakra(profile: dict[str, Any]) -> dict[str, Any]:
-    return call_endpoint(kind="chakra", endpoint="/api/medical/chakra-analysis", payload=build_birth_payload(profile), profile_id=_profile_id(profile))
-
-
-def get_financial_cycles(start: str, end: str, index: str = "SPX") -> dict[str, Any]:
-    return call_endpoint(
-        kind="financial_cycles",
-        endpoint="/api/financial/cycles",
-        payload={"start_date": start, "end_date": end, "market_index": index},
-    )
-
-
-def get_tarot_daily() -> dict[str, Any]:
-    return call_endpoint(kind="tarot_daily", endpoint="/api/tarot/divination/daily", method="GET")
-
-
-def get_tarot_spread(spread_id: str, deck: str = "rws") -> dict[str, Any]:
-    return call_endpoint(
-        kind="tarot_spread",
-        endpoint="/api/tarot/divination/spread",
-        method="GET",
-        query={"spread_id": spread_id, "deck_type": deck, "allow_reversed": "false"},
-    )
-
-
-def get_tarot_3card() -> dict[str, Any]:
-    """
-    Get a 3-card tarot spread: Past, Present, Future.
-    This is a convenience wrapper around get_tarot_spread.
-    """
-    return get_tarot_spread(spread_id="past_present_future", deck="rws")
-
-
-def get_tarot_single() -> dict[str, Any]:
-    return call_endpoint(kind="tarot_single", endpoint="/api/tarot/divination/single", method="GET")
+    target = f"{year}-06-21T12:00:00"
+    return get_ephemeris_data(profile, when=target)
 
 
 def _load_validated_profile(profile_id: str | None = None) -> dict[str, Any]:
@@ -374,12 +417,29 @@ def _load_validated_profile(profile_id: str | None = None) -> dict[str, Any]:
 
 
 def _add_profile_argument(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--profile", help="Profile ID to use; defaults to the active Oracle profile")
+    parser.add_argument(
+        "--profile", help="Profile ID to use; defaults to the active Oracle profile"
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Oracle Astrovisor client")
+    parser = argparse.ArgumentParser(description="Oracle Ephemeris client")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    sky = subparsers.add_parser("sky")
+    _add_profile_argument(sky)
+    sky.add_argument("--datetime", default=None)
+
+    planets = subparsers.add_parser("planets")
+    _add_profile_argument(planets)
+    planets.add_argument("--datetime", default=None)
+
+    luminaries = subparsers.add_parser("luminaries")
+    _add_profile_argument(luminaries)
+    luminaries.add_argument("--datetime", default=None)
+
+    moon_phase = subparsers.add_parser("moon-phase")
+    moon_phase.add_argument("--datetime", default=None)
 
     natal = subparsers.add_parser("natal")
     _add_profile_argument(natal)
@@ -388,54 +448,30 @@ def build_parser() -> argparse.ArgumentParser:
     _add_profile_argument(transit)
     transit.add_argument("--date", dest="date_value", default=date.today().isoformat())
 
-    calendar = subparsers.add_parser("calendar")
-    _add_profile_argument(calendar)
-    calendar.add_argument("--start", required=True)
-    calendar.add_argument("--end", required=True)
+    aspects = subparsers.add_parser("aspects")
+    _add_profile_argument(aspects)
+    aspects.add_argument("--datetime", default=None)
+    aspects.add_argument("--orb", type=float, default=8.0)
+    aspects.add_argument("--bodies", default=None)
 
-    harmonics = subparsers.add_parser("harmonics")
-    _add_profile_argument(harmonics)
+    zodiac = subparsers.add_parser("zodiac")
+    _add_profile_argument(zodiac)
+    zodiac.add_argument("--body", required=True)
+    zodiac.add_argument("--datetime", default=None)
 
-    minor = subparsers.add_parser("minor-aspects")
-    _add_profile_argument(minor)
+    daily_events = subparsers.add_parser("daily-events")
+    _add_profile_argument(daily_events)
+    daily_events.add_argument("--body", required=True)
+    daily_events.add_argument("--datetime", default=None)
 
-    solar = subparsers.add_parser("solar-return")
-    _add_profile_argument(solar)
-    solar.add_argument("--year", type=int, default=datetime.now(timezone.utc).year)
+    earth = subparsers.add_parser("earth")
+    earth.add_argument("--datetime", default=None)
 
-    overlay = subparsers.add_parser("lunation-overlay")
-    _add_profile_argument(overlay)
-    overlay.add_argument("--year", type=int, default=datetime.now(timezone.utc).year)
-
-    returns = subparsers.add_parser("planetary-returns")
-    _add_profile_argument(returns)
-    returns.add_argument("--start", required=True)
-    returns.add_argument("--end", required=True)
-
-    profections = subparsers.add_parser("profections")
-    _add_profile_argument(profections)
-
-    numerology = subparsers.add_parser("numerology")
-    _add_profile_argument(numerology)
-
-    chakra = subparsers.add_parser("chakra")
-    _add_profile_argument(chakra)
-
-    finance = subparsers.add_parser("financial-cycles")
-    finance.add_argument("--start", required=True)
-    finance.add_argument("--end", required=True)
-    finance.add_argument("--index", default="SPX")
-
-    tarot_daily = subparsers.add_parser("tarot-daily")
-    _add_profile_argument(tarot_daily)
-
-    spread = subparsers.add_parser("tarot-spread")
-    _add_profile_argument(spread)
-    spread.add_argument("--spread-id", default="three_cards")
-    spread.add_argument("--deck", default="rws")
-
-    tarot_single = subparsers.add_parser("tarot-single")
-    _add_profile_argument(tarot_single)
+    compare = subparsers.add_parser("compare")
+    _add_profile_argument(compare)
+    compare.add_argument("--date1", required=True)
+    compare.add_argument("--date2", required=True)
+    compare.add_argument("--bodies", default=None)
 
     return parser
 
@@ -445,36 +481,30 @@ def main() -> int:
     args = parser.parse_args()
     profile = _load_validated_profile(getattr(args, "profile", None))
 
-    if args.command == "natal":
+    if args.command == "sky":
+        result = get_current_sky(profile, args.datetime)
+    elif args.command == "planets":
+        result = get_planetary_positions(profile, args.datetime)
+    elif args.command == "luminaries":
+        result = get_luminaries(profile, args.datetime)
+    elif args.command == "moon-phase":
+        result = get_moon_phase(args.datetime)
+    elif args.command == "natal":
         result = get_natal_chart(profile)
     elif args.command == "transits":
         result = get_transits(profile, args.date_value)
-    elif args.command == "calendar":
-        result = get_calendar_predictions(profile, args.start, args.end)
-    elif args.command == "harmonics":
-        result = get_harmonics(profile)
-    elif args.command == "minor-aspects":
-        result = get_minor_aspects(profile)
-    elif args.command == "solar-return":
-        result = get_solar_return(profile, args.year)
-    elif args.command == "lunation-overlay":
-        result = get_lunation_overlay(profile, args.year)
-    elif args.command == "planetary-returns":
-        result = get_planetary_returns(profile, args.start, args.end)
-    elif args.command == "profections":
-        result = get_profections(profile)
-    elif args.command == "numerology":
-        result = get_numerology(profile)
-    elif args.command == "chakra":
-        result = get_chakra(profile)
-    elif args.command == "financial-cycles":
-        result = get_financial_cycles(args.start, args.end, args.index)
-    elif args.command == "tarot-daily":
-        result = get_tarot_daily()
-    elif args.command == "tarot-spread":
-        result = get_tarot_spread(args.spread_id, args.deck)
-    elif args.command == "tarot-single":
-        result = get_tarot_single()
+    elif args.command == "aspects":
+        bodies = args.bodies.split(",") if args.bodies else None
+        result = calculate_aspects(profile, args.datetime, args.orb, bodies)
+    elif args.command == "zodiac":
+        result = get_zodiac_sign(profile, args.body, args.datetime)
+    elif args.command == "daily-events":
+        result = get_daily_events(profile, args.body, args.datetime)
+    elif args.command == "earth":
+        result = get_earth_position(args.datetime)
+    elif args.command == "compare":
+        bodies = args.bodies.split(",") if args.bodies else None
+        result = compare_positions(profile, args.date1, args.date2, bodies)
     else:
         result = _error_wrapper("unknown", args.command, "Unknown command")
 

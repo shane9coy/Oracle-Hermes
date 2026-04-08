@@ -14,7 +14,9 @@ from urllib import request as urllib_request
 
 HOME = Path.home()
 HERMES_DIR = Path(os.environ.get("HERMES_HOME", HOME / ".hermes")).expanduser()
-ORACLE_STATE_DIR = Path(os.environ.get("ORACLE_STATE_DIR", HERMES_DIR / "oracle")).expanduser()
+ORACLE_STATE_DIR = Path(
+    os.environ.get("ORACLE_STATE_DIR", HERMES_DIR / "oracle")
+).expanduser()
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
 
@@ -38,7 +40,14 @@ SCORING_WEIGHTS_PATH = DEFAULTS_DIR / "scoring_weights.yaml"
 
 ENV_PATH = ORACLE_STATE_DIR / ".env"
 ENV_EXAMPLE_PATH = ORACLE_STATE_DIR / ".env.example"
-GOOGLE_API_PATH = HERMES_DIR / "skills" / "productivity" / "google-workspace" / "scripts" / "google_api.py"
+GOOGLE_API_PATH = (
+    HERMES_DIR
+    / "skills"
+    / "productivity"
+    / "google-workspace"
+    / "scripts"
+    / "google_api.py"
+)
 DEFAULT_TIMEOUT = 60
 PROFILE_SUBDIRS = ("cache", "reports", "journal")
 
@@ -52,12 +61,8 @@ DEFAULT_CONSENT = {
     "store_cached_summaries": True,
     "journal_reflections": True,
     "requires_confirmation_for_external_actions": True,
-    "astrovisor_natal": True,
-    "astrovisor_transits": True,
-    "astrovisor_tarot": True,
-    "astrovisor_numerology": True,
-    "astrovisor_chakra": True,
-    "astrovisor_financial": True,
+    "ephemeris_data": True,
+    "ephemeris_planetary": True,
 }
 
 DEFAULT_SCORING_WEIGHTS_TEXT = """# Oracle Scoring Weights
@@ -134,7 +139,12 @@ class OracleHTTPError(RuntimeError):
 
 
 def iso_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 def default_profile_registry() -> dict[str, Any]:
@@ -166,10 +176,18 @@ def ensure_runtime_dirs(profile_id: str | None = None) -> None:
 
     if not SCORING_WEIGHTS_PATH.exists():
         SCORING_WEIGHTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        if LEGACY_SCORING_WEIGHTS_PATH.exists() and LEGACY_SCORING_WEIGHTS_PATH != SCORING_WEIGHTS_PATH:
-            SCORING_WEIGHTS_PATH.write_text(LEGACY_SCORING_WEIGHTS_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+        if (
+            LEGACY_SCORING_WEIGHTS_PATH.exists()
+            and LEGACY_SCORING_WEIGHTS_PATH != SCORING_WEIGHTS_PATH
+        ):
+            SCORING_WEIGHTS_PATH.write_text(
+                LEGACY_SCORING_WEIGHTS_PATH.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
         else:
-            SCORING_WEIGHTS_PATH.write_text(DEFAULT_SCORING_WEIGHTS_TEXT.rstrip() + "\n", encoding="utf-8")
+            SCORING_WEIGHTS_PATH.write_text(
+                DEFAULT_SCORING_WEIGHTS_TEXT.rstrip() + "\n", encoding="utf-8"
+            )
 
     if not PROFILES_REGISTRY_PATH.exists():
         save_json_file(PROFILES_REGISTRY_PATH, default_profile_registry())
@@ -200,52 +218,15 @@ def get_env(key: str, default: str | None = None) -> str | None:
 
 
 def resolve_token_alias(default: str | None = None) -> str | None:
-    env_file_values = load_env_file()
-    token = (
-        os.environ.get("ASTROVISOR_TOKEN")
-        or os.environ.get("ASTROVISOR_API_KEY")
-        or env_file_values.get("ASTROVISOR_TOKEN")
-        or env_file_values.get("ASTROVISOR_API_KEY")
-        or default
-        or ""
-    ).strip()
-    if not token or token in {"replace_me", "YOUR_SECRET_TOKEN", "YOUR_ASTROVISOR_TOKEN"}:
-        return None
-    os.environ.setdefault("ASTROVISOR_TOKEN", token)
-    os.environ.setdefault("ASTROVISOR_API_KEY", token)
-    return token
+    return None
 
 
 def validate_api_key() -> dict[str, Any]:
-    """
-    Validate that Astrovisor API key is working.
-    Returns dict with 'valid', 'error', and 'message' keys.
-    """
-    token = resolve_token_alias()
-    if not token:
-        return {
-            "valid": False,
-            "error": "NO_API_KEY",
-            "message": "No Astrovisor API key found. Set ASTROVISOR_TOKEN in ~/.hermes/oracle/.env"
-        }
-    
-    # Try a simple API call to validate
-    try:
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        }
-        # Use a minimal endpoint to test - the health or ping endpoint
-        test_url = f"{get_env('ASTROVISOR_BASE_URL', 'https://astrovisor.io')}/api/health"
-        response = http_json_request(test_url, method="GET", headers=headers, timeout=10)
-        if response.get("ok") or response.get("status") == "ok":
-            return {"valid": True, "error": None, "message": "API key validated"}
-    except Exception as e:
-        pass
-    
-    # If no /api/health, just return valid since token exists
-    # The actual validation will happen on first API call
-    return {"valid": True, "warning": True, "message": "API key found but /health endpoint not available - will validate on first use"}
+    return {
+        "valid": True,
+        "error": None,
+        "message": "Ephemeris API requires no authentication",
+    }
 
 
 def load_json_file(path: Path, default: Any = None) -> Any:
@@ -259,17 +240,27 @@ def load_json_file(path: Path, default: Any = None) -> Any:
 
 def save_json_file(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, sort_keys=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(data, indent=2, sort_keys=False) + "\n", encoding="utf-8"
+    )
 
 
 def normalize_profile_registry(registry: dict[str, Any] | None) -> dict[str, Any]:
     payload = registry if isinstance(registry, dict) else {}
     profiles = payload.get("profiles")
-    normalized_profiles = [item for item in profiles if isinstance(item, dict)] if isinstance(profiles, list) else []
+    normalized_profiles = (
+        [item for item in profiles if isinstance(item, dict)]
+        if isinstance(profiles, list)
+        else []
+    )
     active_profile_id = payload.get("active_profile_id")
-    profile_ids = {str(item.get("id")) for item in normalized_profiles if item.get("id")}
+    profile_ids = {
+        str(item.get("id")) for item in normalized_profiles if item.get("id")
+    }
     if active_profile_id not in profile_ids:
-        active_profile_id = normalized_profiles[0].get("id") if normalized_profiles else None
+        active_profile_id = (
+            normalized_profiles[0].get("id") if normalized_profiles else None
+        )
     return {
         "version": int(payload.get("version") or 1),
         "active_profile_id": active_profile_id,
@@ -279,8 +270,12 @@ def normalize_profile_registry(registry: dict[str, Any] | None) -> dict[str, Any
 
 def load_profile_registry() -> dict[str, Any]:
     ensure_runtime_dirs()
-    registry = normalize_profile_registry(load_json_file(PROFILES_REGISTRY_PATH, default=default_profile_registry()))
-    if registry != load_json_file(PROFILES_REGISTRY_PATH, default=default_profile_registry()):
+    registry = normalize_profile_registry(
+        load_json_file(PROFILES_REGISTRY_PATH, default=default_profile_registry())
+    )
+    if registry != load_json_file(
+        PROFILES_REGISTRY_PATH, default=default_profile_registry()
+    ):
         save_json_file(PROFILES_REGISTRY_PATH, registry)
     return registry
 
@@ -295,8 +290,12 @@ def save_profile_registry(registry: dict[str, Any]) -> dict[str, Any]:
 def get_active_profile_id() -> str | None:
     ensure_runtime_dirs()
     registry = load_profile_registry()
-    profile_ids = {str(item.get("id")) for item in registry.get("profiles", []) if item.get("id")}
-    active_state = load_json_file(ACTIVE_PROFILE_PATH, default=default_active_profile_payload())
+    profile_ids = {
+        str(item.get("id")) for item in registry.get("profiles", []) if item.get("id")
+    }
+    active_state = load_json_file(
+        ACTIVE_PROFILE_PATH, default=default_active_profile_payload()
+    )
     active_profile_id = active_state.get("active_profile_id")
 
     if active_profile_id in profile_ids:
@@ -388,7 +387,9 @@ def _parse_scalar(value: str) -> Any:
             return float(value)
         except ValueError:
             pass
-    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+    if (value.startswith('"') and value.endswith('"')) or (
+        value.startswith("'") and value.endswith("'")
+    ):
         return value[1:-1]
     return value
 
@@ -471,7 +472,9 @@ def stable_hash(*parts: Any) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def cache_file_path(kind: str, key_parts: Iterable[Any], cache_dir: Path | None = None) -> Path:
+def cache_file_path(
+    kind: str, key_parts: Iterable[Any], cache_dir: Path | None = None
+) -> Path:
     digest = stable_hash(kind, list(key_parts))
     base_dir = cache_dir or CACHE_DIR
     base_dir.mkdir(parents=True, exist_ok=True)
@@ -497,13 +500,20 @@ def load_cache(
         created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
     except ValueError:
         return None
-    age_seconds = (datetime.now(timezone.utc) - created_dt.astimezone(timezone.utc)).total_seconds()
+    age_seconds = (
+        datetime.now(timezone.utc) - created_dt.astimezone(timezone.utc)
+    ).total_seconds()
     if age_seconds > ttl_seconds:
         return None
     return data
 
 
-def save_cache(kind: str, key_parts: Iterable[Any], payload: dict[str, Any], cache_dir: Path | None = None) -> Path:
+def save_cache(
+    kind: str,
+    key_parts: Iterable[Any],
+    payload: dict[str, Any],
+    cache_dir: Path | None = None,
+) -> Path:
     path = cache_file_path(kind, key_parts, cache_dir=cache_dir)
     payload = dict(payload)
     payload.setdefault("cache_meta", {})
@@ -528,10 +538,16 @@ def http_json_request(
     request_headers.setdefault("User-Agent", DEFAULT_USER_AGENT)
 
     if payload is not None:
-        raw_data = json.dumps(payload).encode("utf-8") if not isinstance(payload, (bytes, bytearray)) else payload
+        raw_data = (
+            json.dumps(payload).encode("utf-8")
+            if not isinstance(payload, (bytes, bytearray))
+            else payload
+        )
         request_headers.setdefault("Content-Type", "application/json")
 
-    request_obj = urllib_request.Request(url, data=raw_data, headers=request_headers, method=method.upper())
+    request_obj = urllib_request.Request(
+        url, data=raw_data, headers=request_headers, method=method.upper()
+    )
     try:
         with urllib_request.urlopen(request_obj, timeout=timeout) as response:
             body = response.read().decode("utf-8")
@@ -587,107 +603,99 @@ def as_list(value: Any) -> list[Any]:
 # Daily Brief & Cosmic Snapshot Generation
 # ----------------------------------------------------------------------
 
-def get_token() -> str:
-    """Load Astrovisor token from .env."""
-    env_path = ORACLE_STATE_DIR / ".env"
-    if not env_path.exists():
-        raise RuntimeError(f"Oracle .env not found at {env_path}")
-    token = None
-    for line in env_path.read_text().splitlines():
-        line = line.strip()
-        if line.startswith("#") or not line:
-            continue
-        if "=" in line:
-            key, val = line.split("=", 1)
-            if key.strip() in ("ASTROVISOR_TOKEN", "ASTROVISOR_API_KEY"):
-                token = val.strip()
-                break
-    if not token:
-        raise RuntimeError("No ASTROVISOR_TOKEN found in .env")
-    return token
 
-
-def get_transits_for_datetime(dt: str, lat: float, lon: float, location: str, tz: str) -> dict:
-    """Fetch transits for a given datetime."""
+def get_transits_for_datetime(
+    dt: str, lat: float, lon: float, location: str, tz: str
+) -> dict:
+    """Fetch ephemeris data for a given datetime using Ephemeris API."""
     import requests
-    token = get_token()
-    url = "https://astrovisor.io/api/transits/calculate"
-    payload = {
-        "name": "user",
-        "datetime": dt,
+
+    url = "https://ephemeris.fyi/ephemeris/get_ephemeris_data"
+    params = {
         "latitude": lat,
         "longitude": lon,
-        "location": location,
-        "timezone": tz
+        "datetime": dt,
     }
-    headers = {"Authorization": f"Bearer {token}"}
-    resp = requests.post(url, json=payload, headers=headers, timeout=30)
+    resp = requests.get(url, params=params, timeout=30)
     if resp.status_code != 200:
-        raise RuntimeError(f"Astrovisor error {resp.status_code}: {resp.text[:200]}")
+        raise RuntimeError(f"Ephemeris error {resp.status_code}: {resp.text[:200]}")
     return resp.json()
 
 
-def get_solar_return(year: int, birth_dt: str, lat: float, lon: float, location: str, tz: str) -> dict:
-    """Fetch natal chart with solar return for a given year."""
+def get_solar_return(
+    year: int, birth_dt: str, lat: float, lon: float, location: str, tz: str
+) -> dict:
+    """Fetch ephemeris data for solar return date using Ephemeris API."""
     import requests
-    import re
-    token = get_token()
-    url = "https://astrovisor.io/api/solar/calculate"
-    # Parse birth datetime
-    m = re.match(r"(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})", birth_dt)
-    if not m:
-        raise ValueError(f"Invalid birth datetime format: {birth_dt}")
-    birth_date, birth_time = m.groups()
-    payload = {
-        "name": "user",
-        "datetime": birth_dt,
-        "birth_date": birth_date,
-        "birth_time": birth_time,
+
+    target_dt = f"{year}-06-21T12:00:00"
+    url = "https://ephemeris.fyi/ephemeris/get_ephemeris_data"
+    params = {
         "latitude": lat,
         "longitude": lon,
-        "location": location,
-        "timezone": tz,
-        "house_system": "P",
-        "return_year": year
+        "datetime": target_dt,
     }
-    headers = {"Authorization": f"Bearer {token}"}
-    resp = requests.post(url, json=payload, headers=headers, timeout=30)
+    resp = requests.get(url, params=params, timeout=30)
     if resp.status_code != 200:
-        raise RuntimeError(f"Astrovisor error {resp.status_code}: {resp.text[:200]}")
+        raise RuntimeError(f"Ephemeris error {resp.status_code}: {resp.text[:200]}")
     return resp.json()
 
 
 def generate_cosmic_snapshot(profile: dict) -> str:
     """
     Generate a concise 3-6 sentence daily brief summary for the Oracle menu header.
-    Combines today's transits with the user's natal chart and solar return themes.
+    Combines today's ephemeris data with the user's natal chart.
     """
+    import requests
+
     birth = profile.get("birth_chart", {})
     lat = birth.get("latitude")
     lon = birth.get("longitude")
     location = birth.get("location", "")
     tz = birth.get("timezone", "America/New_York")
-    birth_dt = f"{birth['date']}T{birth['time']}:00"
-    
-    # Get current transits
+
     now = datetime.now()
     dt_now = now.strftime("%Y-%m-%dT%H:%M:%S") + tz_to_offset(tz)
-    
+
     try:
-        transits = get_transits_for_datetime(dt_now, lat, lon, location, tz)
-        transit_data = transits.get("data", {})
-        planets = transit_data.get("transiting_planets", {})
-        period = transit_data.get("period_analysis", {})
-        significant = transit_data.get("significant_transits", [])
+        url = "https://ephemeris.fyi/ephemeris/get_ephemeris_data"
+        params = {"latitude": lat, "longitude": lon, "datetime": dt_now}
+        resp = requests.get(url, params=params, timeout=30)
+        if resp.status_code != 200:
+            return f"Daily brief unavailable: Ephemeris error {resp.status_code}"
+        data = resp.json()
+        planets = data.get("bodies", data)
+
+        def get_longitude(body_key):
+            body = planets.get(body_key, {})
+            if isinstance(body, dict):
+                return body.get("longitude", 0)
+            return 0
+
+        def get_sign(body_key):
+            body = planets.get(body_key, {})
+            if isinstance(body, dict):
+                sign = body.get("sign", "Unknown")
+                if isinstance(sign, dict):
+                    return sign.get("name", "Unknown")
+                return sign
+            return "Unknown"
+
+        sun_long = get_longitude("Sun")
+        moon_long = get_longitude("Moon")
+        moon_sign = get_sign("Moon")
+        mercury = planets.get("Mercury", {})
+        if isinstance(mercury, dict):
+            mercury_retrograde = mercury.get(
+                "is_retrograde", mercury.get("retrograde", False)
+            )
+        else:
+            mercury_retrograde = False
     except Exception as e:
         return f"Daily brief unavailable: {e}"
-    
-    # Get moon phase and sign
-    sun_long = planets.get("Sun", {}).get("longitude", 0)
-    moon_long = planets.get("Moon", {}).get("longitude", 0)
-    moon_sign = planets.get("Moon", {}).get("sign", "Unknown")
+
     phase_angle = (moon_long - sun_long) % 360
-    
+
     if phase_angle < 7.5 or phase_angle >= 352.5:
         phase_name = "New Moon"
     elif phase_angle < 52.5:
@@ -706,79 +714,66 @@ def generate_cosmic_snapshot(profile: dict) -> str:
         phase_name = "Waning Crescent"
     else:
         phase_name = "New Moon"
-    
-    # Get mercury status
-    mercury = planets.get("Mercury", {})
-    mercury_rx = "retrograde" if mercury.get("retrograde") else "direct"
-    
-    # Count planetary returns
-    returns = [t for t in significant if t.get("aspect") == "Conjunction" and 
-               t.get("transit_planet") == t.get("natal_planet")]
-    return_count = len(returns)
-    
-    # Get solar return themes for current year
+
+    mercury_rx = "retrograde" if mercury_retrograde else "direct"
+
     year = now.year
     try:
-        solar = get_solar_return(year, birth_dt, lat, lon, location, tz)
-        solar_data = solar.get("data", {})
-        interpretation = solar_data.get("interpretation", {})
-        year_theme = interpretation.get("year_emphasis", "a year of growth")
-        house_focus = interpretation.get("house_focus", ["various areas"])
+        solar_url = "https://ephemeris.fyi/ephemeris/get_ephemeris_data"
+        solar_dt = f"{year}-06-21T12:00:00"
+        solar_resp = requests.get(
+            solar_url,
+            params={"latitude": lat, "longitude": lon, "datetime": solar_dt},
+            timeout=30,
+        )
+        if solar_resp.status_code == 200:
+            solar_data = solar_resp.json()
+            solar_bodies = solar_data.get("bodies", solar_data)
+            solar_sun = solar_bodies.get("Sun", {})
+            solar_moon = solar_bodies.get("Moon", {})
+            year_theme = f"a year of {phase_name.lower().replace(' moon', '')} energy"
+            house_focus = []
+        else:
+            year_theme = "a year of growth"
+            house_focus = []
     except Exception:
         year_theme = "a year of growth"
         house_focus = []
-    
-    # Get tension score
-    tension = period.get("tension_score", 5)
-    if tension >= 8:
-        tone = "tense and transformative"
-    elif tension >= 5:
-        tone = "balanced with some tension"
-    else:
-        tone = "harmonious"
-    
-    # Build summary (3-6 sentences)
+
+    tone = "balanced"
+
     parts = []
-    
-    # Opening - threshold moment if returns are exact
-    if return_count >= 3:
-        parts.append(f"Today is a rare threshold moment — {return_count} planetary returns are exact, marking a significant life checkpoint.")
-    else:
-        parts.append(f"Today the cosmos reflects your natal pattern with {phase_name} energy and Moon in {moon_sign}.")
-    
-    # Moon phase guidance
+    parts.append(
+        f"Today the cosmos reflects with {phase_name} energy and Moon in {moon_sign}."
+    )
+
     if "New Moon" in phase_name or "First Quarter" in phase_name:
         parts.append("This is a time for new beginnings and forward motion.")
     elif "Full Moon" in phase_name or "Last Quarter" in phase_name:
-        parts.append(f"{phase_name} invites release and completion of what no longer serves you.")
+        parts.append(
+            f"{phase_name} invites release and completion of what no longer serves you."
+        )
     else:
         parts.append(f"The {phase_name} supports steady progress and reflection.")
-    
-    # Mercury status
+
     if mercury_rx == "retrograde":
-        parts.append("Mercury retrograde turns your attention inward: focus on reviewing, revising, and completing unfinished business rather than launching new ventures.")
+        parts.append(
+            "Mercury retrograde turns your attention inward: focus on reviewing, revising, and completing unfinished business."
+        )
     else:
-        parts.append("Mercury is direct — communication flows clearly and new initiatives are favored.")
-    
-    # Solar return theme
-    if house_focus:
-        focus_str = ", ".join(house_focus[:2])
-        # Fix the year_emphasis duplication
-        year_clean = year_theme.replace("year of ", "").replace("Year of ", "")
-        parts.append(f"Your {year} solar return emphasizes {focus_str.lower()} — a year of {year_clean.lower()}.")
-    
-    # Closing - tone and recommendation
-    if tension >= 8:
-        parts.append(f"This period is {tone}. Ground yourself with rest and inner work.")
-    else:
-        parts.append(f"The energy is {tone}. Trust the flow.")
-    
+        parts.append(
+            "Mercury is direct — communication flows clearly and new initiatives are favored."
+        )
+
+    parts.append(f"The energy is {tone}. Trust the flow.")
+
     return " ".join(parts)
 
 
 def tz_to_offset(tz: str) -> str:
     """Convert timezone name to offset string like -04:00."""
     import zoneinfo
+
     try:
         tzobj = zoneinfo.ZoneInfo(tz)
         now = datetime.now(tzobj)
@@ -789,11 +784,12 @@ def tz_to_offset(tz: str) -> str:
 
 
 # ----------------------------------------------------------------------
-# NATAL-MCP Fallback System
+# Ephemeris API - Primary Data Source
 # ----------------------------------------------------------------------
-# If Astrovisor rate-limits, Oracle automatically falls back to natal-mcp
-# natal-mcp provides: create_natal_chart, create_transit_chart, 
-# create_solar_return_chart, generate_chart_report
+# Oracle uses the Ephemeris API at https://ephemeris.fyi for all
+# astrological data including planetary positions, moon phases,
+# aspects, zodiac signs, and daily events.
+# No authentication is required.
 # ----------------------------------------------------------------------
 
 import subprocess
@@ -813,20 +809,18 @@ def _run_natal_mcp(command: list[str], timeout: int = 30) -> dict:
             if os.path.exists(candidate):
                 natal_mcp_path = candidate
                 break
-    
+
     try:
         result = subprocess.run(
-            [natal_mcp_path] + command,
-            capture_output=True,
-            text=True,
-            timeout=timeout
+            [natal_mcp_path] + command, capture_output=True, text=True, timeout=timeout
         )
         if result.returncode != 0:
             raise RuntimeError(f"natal-mcp error: {result.stderr}")
-        
+
         # Parse JSON from stdout
         import re
-        json_match = re.search(r'\{.*\}', result.stdout, re.DOTALL)
+
+        json_match = re.search(r"\{.*\}", result.stdout, re.DOTALL)
         if json_match:
             return json.loads(json_match.group())
         return {"raw": result.stdout}
@@ -836,9 +830,15 @@ def _run_natal_mcp(command: list[str], timeout: int = 30) -> dict:
         raise RuntimeError(f"natal-mcp failed: {e}")
 
 
-def create_natal_chart_via_mcp(name: str, birth_date: str, birth_time: str, 
-                                latitude: float, longitude: float, 
-                                location: str, timezone: str) -> dict:
+def create_natal_chart_via_mcp(
+    name: str,
+    birth_date: str,
+    birth_time: str,
+    latitude: float,
+    longitude: float,
+    location: str,
+    timezone: str,
+) -> dict:
     """
     Fallback: Create natal chart using natal-mcp if Astrovisor fails.
     """
@@ -847,10 +847,16 @@ def create_natal_chart_via_mcp(name: str, birth_date: str, birth_time: str,
     raise NotImplementedError("natal-mcp fallback not yet implemented - use Astrovisor")
 
 
-def create_transit_chart_via_mcp(name: str, transit_date: str, 
-                                  latitude: float, longitude: float,
-                                  location: str, timezone: str,
-                                  birth_date: str = None, birth_time: str = None) -> dict:
+def create_transit_chart_via_mcp(
+    name: str,
+    transit_date: str,
+    latitude: float,
+    longitude: float,
+    location: str,
+    timezone: str,
+    birth_date: str = None,
+    birth_time: str = None,
+) -> dict:
     """
     Fallback: Create transit chart using natal-mcp if Astrovisor fails.
     natal-mcp provides: create_transit_chart
@@ -880,78 +886,48 @@ def get_natal_mcp_available() -> bool:
     return False
 
 
-def get_transits_with_cache(datetime: str, lat: float, lon: float, location: str, tz: str, 
-                           profile_id: str = "user", force_refresh: bool = False) -> dict:
+def get_transits_with_cache(
+    datetime: str,
+    lat: float,
+    lon: float,
+    location: str,
+    tz: str,
+    profile_id: str = "user",
+    force_refresh: bool = False,
+) -> dict:
     """
-    Get transits - uses cache first, then natal-mcp (preferred), then Astrovisor.
+    Get ephemeris data - uses cache first, then Ephemeris API.
     Cached for 1 hour.
     """
     import time
-    import subprocess
-    import os
-    
-    cache_key = f"transits_{datetime[:10]}"  # Cache by date
+    import requests
+
+    cache_key = f"ephemeris_{datetime[:10]}"
     cache_dir = ORACLE_STATE_DIR / "profiles" / profile_id / "cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_file = cache_dir / f"{cache_key}.json"
-    
-    # Check cache first (1 hour TTL)
+
     if not force_refresh and cache_file.exists():
         cache_age = time.time() - cache_file.stat().st_mtime
-        if cache_age < 3600:  # 1 hour
+        if cache_age < 3600:
             with open(cache_file) as f:
                 return json.load(f)
-    
-    last_error = None
-    
-    # Try natal-mcp first (local, free)
-    if get_natal_mcp_available():
-        try:
-            natal_mcp_home = os.environ.get("NATAL_MCP_HOME", os.path.expanduser("~/natal_mcp"))
-            natal_mcp_bin = os.path.join(natal_mcp_home, "natal-mcp")
-            
-            # Build the transit chart request
-            transit_request = {
-                "datetime": datetime,
-                "latitude": lat,
-                "longitude": lon,
-                "location": location,
-                "timezone": tz
-            }
-            
-            # Try calling natal-mcp via stdio
-            result = subprocess.run(
-                [natal_mcp_bin, "transits"],
-                input=json.dumps(transit_request),
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            
-            if result.returncode == 0 and result.stdout.strip():
-                data = json.loads(result.stdout)
-                # Cache it
-                with open(cache_file, 'w') as f:
-                    json.dump(data, f)
-                return data
-        except Exception as e:
-            last_error = e
-            # Fall through to try Astrovisor
-    
-    # Fallback to Astrovisor
+
     try:
-        data = get_transits_for_datetime(datetime, lat, lon, location, tz)
-        # Cache it
-        with open(cache_file, 'w') as f:
+        url = "https://ephemeris.fyi/ephemeris/get_ephemeris_data"
+        params = {"latitude": lat, "longitude": lon, "datetime": datetime}
+        resp = requests.get(url, params=params, timeout=30)
+        if resp.status_code != 200:
+            raise RuntimeError(f"Ephemeris error {resp.status_code}")
+        data = resp.json()
+        with open(cache_file, "w") as f:
             json.dump(data, f)
         return data
     except Exception as e:
-        last_error = e
-        # If cache exists and API failed, return stale cache
         if cache_file.exists():
             with open(cache_file) as f:
                 return json.load(f)
-        raise RuntimeError(f"Failed to get transits (MCP: {last_error})") from last_error
+        raise RuntimeError(f"Failed to get ephemeris data: {e}") from e
 
 
 def get_oracle_menu() -> str:
@@ -962,15 +938,15 @@ def get_oracle_menu() -> str:
     return """
 **Oracle Menu:**
 
-1. **AstroVisor - Calendar Review** — Your schedule through the stars
+1. **Ephemeris - Current Sky** — Live planetary positions and aspects
 2. **Daily brief** — Full cosmic weather for today
 3. **Weekly outlook** — Best days for launches, relationships, communication, finances  
 4. **Natal deep-dive** — Your full birth chart analysis
 5. **Timing question** — When to launch/sign/schedule/post
-6. **Tarot pull** — Daily card or 3-card spread (past/present/future)
-7. **Solar Returns** — Year-ahead themes, house focus, key dates
-8. **Numerology** — Life path, personal year, key numbers
-9. **Chakra analysis** — 7-chakra energetic profile (API call - pulls from cache)
+6. **Moon Phase** — Current lunar phase and illumination
+7. **Zodiac Sign** — Get zodiac sign for any celestial body
+8. **Daily Events** — Rising, culmination, and setting times
+9. **Tarot pull** — Daily card or 3-card spread (past/present/future)
 10. **Help & About** — Commands, features, engineering docs
 
 **Oracle Star Map:** file:///Users/sc/.hermes/skills/oracle/astro-companion/ui/oracle_chart.html
@@ -992,14 +968,13 @@ def get_oracle_help() -> str:
 └─────────────────────────────────────────────────────────────────────────────┘
 
 Oracle is a cosmic strategist combining:
-  • Astrovisor.io API — primary astrological data source
-  • natal-mcp — backup/alternative natal chart calculations
+  • Ephemeris API (ephemeris.fyi) — primary astrological data source
   • Google Calendar/Gmail integration — context-aware scheduling
   • Interactive 3D Star Map — browser-based chart visualization
   • Terminal rendering — ASCII/Unicode natal wheels, aspect matrices
 
-Oracle defaults to natal-mcp for natal chart data (cached locally), then
-falls back to Astrovisor for transits and live calculations.
+Oracle uses the Ephemeris API for all planetary positions, moon phases,
+aspects, zodiac signs, and daily celestial events.
 
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -1107,7 +1082,9 @@ import os
 import json
 from pathlib import Path
 
-ORACLE_STATE_DIR = Path(os.environ.get("ORACLE_HOME", Path.home() / ".hermes" / "oracle"))
+ORACLE_STATE_DIR = Path(
+    os.environ.get("ORACLE_HOME", Path.home() / ".hermes" / "oracle")
+)
 PROFILES_DIR = ORACLE_STATE_DIR / "profiles"
 
 
@@ -1124,7 +1101,7 @@ def save_profile(profile_id: str, profile: dict):
     """Save a profile to disk."""
     profile_path = PROFILES_DIR / profile_id / "profile.json"
     profile_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(profile_path, 'w') as f:
+    with open(profile_path, "w") as f:
         json.dump(profile, f, indent=2)
 
 
@@ -1150,14 +1127,15 @@ def get_natal_with_cache(profile_id: str = "user", force_refresh: bool = False) 
         cached = get_cached_natal(profile_id)
         if cached:
             return cached
-    
+
     # Fetch from API if no cache
     from . import get_token, get_solar_return
+
     profile = get_profile(profile_id)
     birth = profile.get("birth_chart", {})
     if not birth:
         raise RuntimeError("No birth chart data in profile")
-    
+
     birth_dt = f"{birth['date']}T{birth['time']}:00"
     natal = get_solar_return(
         2026,  # any year works for natal
@@ -1165,9 +1143,9 @@ def get_natal_with_cache(profile_id: str = "user", force_refresh: bool = False) 
         birth.get("latitude"),
         birth.get("longitude"),
         birth.get("location", ""),
-        birth.get("timezone", "America/New_York")
+        birth.get("timezone", "America/New_York"),
     )
-    
+
     # Cache it
     cache_natal(profile_id, natal.get("data", {}))
     return natal.get("data", {})
@@ -1177,8 +1155,10 @@ def get_natal_with_cache(profile_id: str = "user", force_refresh: bool = False) 
 # Solar Return & Planetary Returns via natal-mcp (if available)
 # ----------------------------------------------------------------------
 
-def get_solar_return_via_mcp(birth_dt: str, lat: float, lon: float, 
-                              location: str, tz: str, year: int) -> dict:
+
+def get_solar_return_via_mcp(
+    birth_dt: str, lat: float, lon: float, location: str, tz: str, year: int
+) -> dict:
     """
     Get solar return data via natal-mcp.
     natal-mcp must be configured in Hermes MCP config.
@@ -1196,63 +1176,72 @@ def get_solar_return_via_mcp(birth_dt: str, lat: float, lon: float,
 
 
 # ----------------------------------------------------------------------
-# Smart API Client with Fallback
+# Smart API Client with Ephemeris
 # ----------------------------------------------------------------------
+
 
 class OracleAPI:
     """
-    Smart API client that tries Astrovisor first, falls back to natal-mcp on rate limit.
+    Smart API client using Ephemeris API at https://ephemeris.fyi
     """
-    
+
     def __init__(self, profile: dict = None):
         self.profile = profile
-        self.token = get_token()
-        self.using_fallback = False
-        self.rate_limited = False
-    
-    def _check_rate_limit(self, response) -> bool:
-        """Check if response indicates rate limiting."""
-        if hasattr(response, 'status_code'):
-            if response.status_code == 429:
-                self.rate_limited = True
-                return True
-        return False
-    
-    def get_transits(self, datetime: str, lat: float, lon: float, location: str, tz: str) -> dict:
-        """Get transits with fallback."""
+
+    def get_ephemeris(
+        self, lat: float, lon: float, datetime: str | None = None
+    ) -> dict:
+        """Get full ephemeris data for a location and time."""
         import requests
-        
-        url = "https://astrovisor.io/api/transits/calculate"
-        payload = {
-            "name": self.profile.get("preferred_name", "user") if self.profile else "user",
-            "datetime": datetime,
-            "latitude": lat,
-            "longitude": lon,
-            "location": location,
-            "timezone": tz
-        }
-        headers = {"Authorization": f"Bearer {self.token}"}
-        
-        try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=30)
-            if self._check_rate_limit(resp):
-                self._trigger_fallback("transits")
-                return self._get_transits_fallback(datetime, lat, lon, location, tz)
-            resp.raise_for_status()
-            return resp.json()
-        except requests.exceptions.RequestException as e:
-            self._trigger_fallback("transits")
-            return self._get_transits_fallback(datetime, lat, lon, location, tz)
-    
-    def _trigger_fallback(self, endpoint: str):
-        """Log that we're switching to fallback."""
-        self.using_fallback = True
-        print(f"[Oracle] Astrovisor rate-limited. Switching to natal-mcp for {endpoint}...")
-    
-    def _get_transits_fallback(self, datetime: str, lat: float, lon: float, location: str, tz: str) -> dict:
-        """Get transits via natal-mcp fallback."""
-        # For now, return error - fallback implementation needed
-        raise RuntimeError(
-            "Astrovisor rate-limited and natal-mcp fallback not fully implemented. "
-            "Consider upgrading Astrovisor subscription or waiting for rate limit reset."
-        )
+
+        url = "https://ephemeris.fyi/ephemeris/get_ephemeris_data"
+        params = {"latitude": lat, "longitude": lon}
+        if datetime:
+            params["datetime"] = datetime
+
+        resp = requests.get(url, params=params, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_moon_phase(self, datetime: str | None = None) -> dict:
+        """Get current moon phase."""
+        import requests
+
+        url = "https://ephemeris.fyi/ephemeris/get_moon_phase"
+        params = {}
+        if datetime:
+            params["datetime"] = datetime
+
+        resp = requests.get(url, params=params, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_planetary_positions(
+        self, lat: float, lon: float, datetime: str | None = None
+    ) -> dict:
+        """Get planetary positions (excluding Sun and Moon)."""
+        import requests
+
+        url = "https://ephemeris.fyi/ephemeris/get_planetary_positions"
+        params = {"latitude": lat, "longitude": lon}
+        if datetime:
+            params["datetime"] = datetime
+
+        resp = requests.get(url, params=params, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+
+    def calculate_aspects(
+        self, lat: float, lon: float, datetime: str | None = None, orb: float = 8.0
+    ) -> dict:
+        """Calculate astrological aspects."""
+        import requests
+
+        url = "https://ephemeris.fyi/ephemeris/calculate_aspects"
+        params = {"latitude": lat, "longitude": lon, "orb": orb}
+        if datetime:
+            params["datetime"] = datetime
+
+        resp = requests.get(url, params=params, timeout=30)
+        resp.raise_for_status()
+        return resp.json()

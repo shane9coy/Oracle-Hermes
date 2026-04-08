@@ -63,10 +63,8 @@ echo -e "${GREEN}[3/5]${NC} Configuring..."
 # Create .env file
 cat > "$ORACLE_DIR/.env" << 'EOF'
 # Oracle local environment
-# Get your free API key from https://astrovisor.io
-ASTROVISOR_TOKEN=pk-usr-YOUR_TOKEN_HERE
-ASTROVISOR_BASE_URL=https://astrovisor.io
-ASTROVISOR_TIMEOUT=60
+# Ephemeris API (ephemeris.fyi) does not require authentication
+# No API key needed - just uses latitude/longitude for planetary data
 EOF
 
 # Create default consent
@@ -80,12 +78,8 @@ calendar_write: false
 store_cached_summaries: true
 journal_reflections: true
 requires_confirmation_for_external_actions: true
-astrovisor_natal: true
-astrovisor_transits: true
-astrovisor_tarot: true
-astrovisor_numerology: true
-astrovisor_chakra: true
-astrovisor_financial: true
+ephemeris_data: true
+ephemeris_planetary: true
 EOF
 
 # =============================================================================
@@ -159,10 +153,8 @@ echo ""
 echo -e "${GREEN}✨ ORACLE INSTALLED!${NC}"
 echo ""
 echo "Next steps:"
-echo "  1. Get your free API key: https://astrovisor.io"
-echo "  2. Edit: ~/.hermes/oracle/.env"
-echo "  3. Update your birth info in: ~/.hermes/oracle/profiles/user/profile.json"
-echo "  4. Run: /oracle"
+echo "  1. Update your birth info in: ~/.hermes/oracle/profiles/user/profile.json"
+echo "  2. Run: /oracle"
 echo ""
 echo -e "${YELLOW}Want to start the browser star map?${NC}"
 echo "  cd ~/.hermes/skills/oracle/astro-companion/ui && python server.py"

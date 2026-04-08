@@ -17,10 +17,6 @@ journal_reflections: true
 # External actions
 requires_confirmation_for_external_actions: true
 
-# Astrovisor API feature access
-astrovisor_natal: true
-astrovisor_transits: true
-astrovisor_tarot: true
-astrovisor_numerology: true
-astrovisor_chakra: true
-astrovisor_financial: true
+# Ephemeris API feature access (ephemeris.fyi)
+ephemeris_data: true
+ephemeris_planetary: true

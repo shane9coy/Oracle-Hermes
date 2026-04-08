@@ -53,16 +53,14 @@ oracle-astro/
 
 - Hermes Agent (latest)
 - Python 3.9+
-- Astrovisor API key (or natal-mcp)
 
 ## Setup
 
-1. **Get an API key** from [Astrovisor.io](https://astrovisor.io)
-2. **Configure Oracle:**
+1. **Configure Oracle:**
    ```bash
-   echo "ASTROVISOR_TOKEN=your_token" > ~/.hermes/oracle/.env
+   # Ephemeris API (ephemeris.fyi) requires no authentication
    ```
-3. **Run Oracle:**
+2. **Run Oracle:**
    ```
    /oracle
    ```
@@ -88,8 +86,7 @@ cd ui && python server.py
 ## Tech Stack
 
 - **Hermes Agent** — AI agent framework
-- **Astrovisor API** — Astrology calculations
-- **natal-mcp** — Local chart generation (fallback)
+- **Ephemeris API** (ephemeris.fyi) — Planetary and astrological data
 - **Three.js** — 3D browser visualization
 
 ## License
